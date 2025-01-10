@@ -7,6 +7,13 @@ import (
 	"github.com/neghi-go/auth"
 )
 
+type Oauth struct {
+	AccessToken  string                 `json:"access_token"`
+	RefreshToken string                 `json:"refresh_token"`
+	IDToken      string                 `json:"id_token"`
+	Data         map[string]interface{} `json:"data"`
+}
+
 type endpoint struct {
 	token_url string
 }
