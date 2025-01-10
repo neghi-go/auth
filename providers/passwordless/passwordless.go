@@ -1,31 +1,38 @@
 package passwordless
 
 import (
-	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neghi-go/auth"
 )
 
-type PasswordlessProvider[T any] struct {
-	prefix string
+type User struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	LastLogin time.Time `json:"last_login"`
 }
 
-func (p *PasswordlessProvider[T]) Init(r chi.Router) {
-	r.Post(p.prefix+"/authenticate", func(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
-		if err != nil {
-			panic(err)
-		}
+type PasswordlessProviderConfig struct {
+	authorize func(w http.ResponseWriter, r *http.Request)
+}
 
-		//send login link
-		w.WriteHeader(http.StatusOK)
-	})
-	r.Post(p.prefix+"/login", func(w http.ResponseWriter, r *http.Request) {
-		token := r.URL.Query().Get("token")
+func New(cfg *PasswordlessProviderConfig) *auth.Provider {
+	return &auth.Provider{
+		Type: "magic-link",
+		Init: func(r chi.Router) {
+			r.Post("/magic-link/authorize", cfg.authorize)
+		},
+	}
+}
 
-		if token == "" {
-			panic(errors.New("panic"))
-		}
-	})
+func authorize(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		panic(err)
+	}
+
+	//send login link
+	w.WriteHeader(http.StatusOK)
 }

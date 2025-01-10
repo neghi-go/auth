@@ -1,10 +1,11 @@
 package auth
 
-type Auth[T any] struct {
-	Providers []AuthProvider
+type Options func(*Auth)
+
+type Auth struct {
+	providers map[string]Provider
 }
 
-func New[T any]() *Auth[T] {
-	return &Auth[T]{}
+func New(opts ...Options) *Auth {
+	return &Auth{}
 }
-

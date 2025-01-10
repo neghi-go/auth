@@ -31,7 +31,7 @@ type Options func(*JWT)
 type JWT struct {
 	algo        Algo
 	private_key *rsa.PrivateKey
-	public_key  *rsa.PublicKey
+	public_key  any
 	issuer      string
 }
 
@@ -70,7 +70,7 @@ func WithPrivateKey(private_key string) Options {
 func WithPublicKey(public_key string) Options {
 	pub, _ := base64.StdEncoding.DecodeString(public_key)
 	block, _ := pem.Decode(pub)
-	publicKey, _ := x509.ParsePKCS1PublicKey(block.Bytes)
+	publicKey, _ := x509.ParsePKIXPublicKey(block.Bytes)
 	return func(j *JWT) {
 		j.public_key = publicKey
 	}
