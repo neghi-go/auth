@@ -6,6 +6,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/auth"
+	"github.com/neghi-go/auth/storage"
+	_ "golang.org/x/crypto/argon2"
+	_ "golang.org/x/crypto/bcrypt"
+	_ "golang.org/x/crypto/scrypt"
 )
 
 type Option func(*PasswordProviderConfig)
@@ -18,7 +22,8 @@ type User struct {
 }
 
 type PasswordProviderConfig struct {
-	hash Hasher
+	hash  Hasher
+	store storage.Store
 }
 
 func Config(opts ...Option) *PasswordProviderConfig {
@@ -62,4 +67,14 @@ func reset() http.HandlerFunc {
 type Hasher interface {
 	hash(password string, salt int) (string, error)
 	compare(password, compare string) error
+}
+
+type ArgonHasher struct {
+}
+
+func (a *ArgonHasher) hash(password string, salt int) (string, error) {
+	return "", nil
+}
+func (a *ArgonHasher) compare(password string, compare string) error {
+	return nil
 }
