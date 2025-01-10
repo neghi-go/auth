@@ -15,24 +15,17 @@ type User struct {
 }
 
 type PasswordlessProviderConfig struct {
-	authorize func(w http.ResponseWriter, r *http.Request)
 }
 
 func New(cfg *PasswordlessProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: "magic-link",
 		Init: func(r chi.Router) {
-			r.Post("/magic-link/authorize", cfg.authorize)
+			r.Post("/magic-link/authorize", authorize())
 		},
 	}
 }
 
-func authorize(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
-		panic(err)
-	}
-
-	//send login link
-	w.WriteHeader(http.StatusOK)
+func authorize() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }

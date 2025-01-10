@@ -22,16 +22,22 @@ type OauthProviderConfig struct {
 	clientID     string
 	clientSecret string
 	endpoint     endpoint
-	authorize    func(w http.ResponseWriter, r *http.Request)
-	callback     func(w http.ResponseWriter, r *http.Request)
 }
 
 func New(cfg *OauthProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: cfg.provider + "-" + "oauth",
 		Init: func(r chi.Router) {
-			r.Get("/"+cfg.provider+"/authorize", cfg.authorize)
-			r.Get("/"+cfg.provider+"/callback", cfg.callback)
+			r.Get("/"+cfg.provider+"/authorize", authorize())
+			r.Get("/"+cfg.provider+"/callback", callback())
 		},
 	}
+}
+
+func authorize() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
+}
+
+func callback() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }

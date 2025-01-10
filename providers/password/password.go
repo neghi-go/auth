@@ -18,20 +18,11 @@ type User struct {
 }
 
 type PasswordProviderConfig struct {
-	login    func(w http.ResponseWriter, r *http.Request)
-	register func(w http.ResponseWriter, r *http.Request)
-	reset    func(w http.ResponseWriter, r *http.Request)
-	logout   func(w http.ResponseWriter, r *http.Request)
-	hash     Hasher
+	hash Hasher
 }
 
 func Config(opts ...Option) *PasswordProviderConfig {
-	cfg := &PasswordProviderConfig{
-		login:    login,
-		register: register,
-		reset:    reset,
-		logout:   logout,
-	}
+	cfg := &PasswordProviderConfig{}
 
 	for _, opt := range opts {
 		opt(cfg)
@@ -44,44 +35,28 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: "password",
 		Init: func(r chi.Router) {
-			r.Post("/password/login", cfg.login)
-			r.Post("/password/register", cfg.register)
-			r.Post("/password/reset-password", cfg.reset)
-			r.Post("/logout", cfg.logout)
+			r.Post("/password/login", login())
+			r.Post("/password/register", register())
+			r.Post("/password/reset-password", reset())
+			r.Post("/logout", logout())
 		},
 	}
 }
 
-func login(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
-		panic(err)
-	}
-
-	//create s4ession
-
-	//return user
-	w.WriteHeader(http.StatusOK)
+func login() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
-func register(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	switch token {
-	case "":
-	default:
-	}
+func register() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
-func logout(w http.ResponseWriter, r *http.Request) {
-
+func logout() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
-func reset(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	switch token {
-	case "":
-	default:
-	}
+func reset() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
 type Hasher interface {
