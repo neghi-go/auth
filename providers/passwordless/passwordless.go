@@ -26,7 +26,7 @@ type User struct {
 
 type PasswordlessProviderConfig struct {
 	store   storage.Store
-	send    func(email string, token string) error
+	notify  func(email string, token string) error
 	encrypt *auth.Encrypt
 }
 
@@ -105,7 +105,7 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 			}
 			token, _ := cfg.encrypt.Encrypt(tokenValues)
 			// send to user
-			_ = cfg.send(email, token)
+			_ = cfg.notify(email, token)
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
 				Send()
@@ -126,7 +126,7 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
 			}
 			token, _ := cfg.encrypt.Encrypt(tokenValues)
-			_ = cfg.send(email, token)
+			_ = cfg.notify(email, token)
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
 				Send()

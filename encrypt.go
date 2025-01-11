@@ -1,9 +1,7 @@
 package auth
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/gob"
 
 	"github.com/neghi-go/utilities"
 )
@@ -13,13 +11,12 @@ type Encrypt struct {
 
 func (e *Encrypt) Encrypt(value map[string]any) (string, error) {
 	value["_pad"] = utilities.Generate(16)
-	var b bytes.Buffer
-	enc := gob.NewEncoder(&b)
-	if err := enc.Encode(&value); err != nil {
+	b, err := GobEncode(value)
+	if err != nil {
 		return "", err
 	}
 
-	return base64.RawURLEncoding.EncodeToString(b.Bytes()), nil
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func (e *Encrypt) Decrypt(value string) (map[string]any, error) {
@@ -28,9 +25,7 @@ func (e *Encrypt) Decrypt(value string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	dec := gob.NewDecoder(bytes.NewBuffer(b))
-
-	err = dec.Decode(&res)
+	err = GobDecode(b, &res)
 	if err != nil {
 		return nil, err
 	}
