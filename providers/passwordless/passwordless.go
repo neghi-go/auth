@@ -25,19 +25,21 @@ type User struct {
 }
 
 type PasswordlessProviderConfig struct {
-	store storage.Store
+	store   storage.Store
+	send    func(email string, token string) error
+	encrypt *auth.Encrypt
 }
 
 func New(cfg *PasswordlessProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: "magic-link",
 		Init: func(r chi.Router) {
-			r.Post("/magic-link/authorize", authorize(cfg.store))
+			r.Post("/magic-link/authorize", authorize(cfg))
 		},
 	}
 }
 
-func authorize(store storage.Store) http.HandlerFunc {
+func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		res := utilities.JSON(w)
 		action := r.URL.Query().Get("action")
@@ -63,30 +65,55 @@ func authorize(store storage.Store) http.HandlerFunc {
 			}
 			//when url contains token
 			//parse token
+			tokenValues, _ := cfg.encrypt.Decrypt(token)
 			//validate parsed token
-			// create session for user
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				Send()
-		case resend:
-			//regenerate session/jwt token
-			if _, err := store.Get(r.Context(), email); err != nil {
+			if tokenValues["email"] != email {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
 					Send()
 				return
 			}
+			timestamp, _ := tokenValues["expiry"].(int64)
+			if time.Now().UTC().Unix() > timestamp {
+				res.SetStatus(utilities.ResponseError).
+					SetStatusCode(http.StatusBadRequest).
+					SetMessage("validation token has expire, please try again").
+					Send()
+				return
+			}
 
-			//create validation code.
+			if _, err := cfg.store.Get(r.Context(), email); err != nil {
+				res.SetStatus(utilities.ResponseError).
+					SetStatusCode(http.StatusBadRequest).
+					Send()
+				return
+			}
+			// create session for user
+			res.SetStatus(utilities.ResponseSuccess).
+				SetStatusCode(http.StatusOK).
+				Send()
+		case resend:
+			if _, err := cfg.store.Get(r.Context(), email); err != nil {
+				res.SetStatus(utilities.ResponseError).
+					SetStatusCode(http.StatusBadRequest).
+					Send()
+				return
+			}
+			tokenValues := map[string]any{
+				"email":  email,
+				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+			}
+			token, _ := cfg.encrypt.Encrypt(tokenValues)
 			// send to user
+			_ = cfg.send(email, token)
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
 				Send()
 		default:
 			//get user if it exist and generate session
-			if _, err := store.Get(r.Context(), email); err != nil {
+			if _, err := cfg.store.Get(r.Context(), email); err != nil {
 				if errors.Is(err, errors.New("doc not found")) {
-					if err := store.Set(r.Context(), []byte("")); err != nil {
+					if err := cfg.store.Set(r.Context(), []byte("")); err != nil {
 						res.SetStatus(utilities.ResponseError).
 							SetStatusCode(http.StatusBadRequest).
 							Send()
@@ -94,9 +121,12 @@ func authorize(store storage.Store) http.HandlerFunc {
 					}
 				}
 			}
-
-			//create session code and send email or console.log.
-
+			tokenValues := map[string]any{
+				"email":  email,
+				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+			}
+			token, _ := cfg.encrypt.Encrypt(tokenValues)
+			_ = cfg.send(email, token)
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
 				Send()
