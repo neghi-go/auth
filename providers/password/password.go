@@ -23,10 +23,14 @@ const (
 type Option func(*PasswordProviderConfig)
 
 type User struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	LastLogin int64  `json:"last_login"`
+	ID                        string `json:"id"`
+	Email                     string `json:"email"`
+	EmailVerifyToken          string `json:"-"`
+	EmailVerifyTokenExpires   time.Time
+	PasswordResetToken        string
+	PasswordResetTokenExpires time.Time
+	Password                  string `json:"password"`
+	LastLogin                 int64  `json:"last_login"`
 }
 
 type PasswordProviderConfig struct {
@@ -52,7 +56,9 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 		Init: func(r chi.Router) {
 			r.Post("/password/login", login(cfg))
 			r.Post("/password/register", register(cfg))
-			r.Post("/password/reset-password", reset())
+            r.Post("/password/register/:token", register(cfg))
+			r.Post("/password/reset-password", reset(cfg))
+            r.Post("/password/reset-password/:token", reset(cfg))
 			r.Post("/logout", logout())
 		},
 	}
@@ -72,7 +78,7 @@ func login(cfg *PasswordProviderConfig) http.HandlerFunc {
 		email := r.Form.Get("email")
 		password := r.Form.Get("password")
 
-		data, err := cfg.store.Get(r.Context(), email)
+		data, _ := cfg.store.Get(r.Context(), email)
 
 		user := User{}
 		err = auth.GobDecode(data, &user)
@@ -213,8 +219,38 @@ func logout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {}
 }
 
-func reset() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {}
+func reset(cfg *PasswordProviderConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		res := utilities.JSON(w)
+		err := r.ParseForm()
+		if err != nil {
+			res.SetStatus(utilities.ResponseError).
+				SetStatusCode(http.StatusBadRequest).
+				Send()
+			return
+		}
+		action := r.URL.Query().Get("action")
+		switch Action(action) {
+		case resend:
+			email := r.Form.Get("email")
+			data, err := cfg.store.Get(r.Context(), email)
+			if err != nil {
+				res.SetStatus(utilities.ResponseError).
+					SetStatusCode(http.StatusBadRequest).
+					Send()
+				return
+			}
+			user := &User{}
+			err = auth.GobDecode(data, &user)
+			if err != nil {
+				res.SetStatus(utilities.ResponseError).
+					SetStatusCode(http.StatusBadRequest).
+					Send()
+				return
+			}
+		default:
+		}
+	}
 }
 
 type Hasher interface {
