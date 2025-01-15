@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os/user"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -27,7 +28,12 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-type ResetPasswordRequest struct {
+type registerRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type resetPasswordRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -114,39 +120,22 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 						SetStatusCode(http.StatusOK).
 						SetMessage("your email is yet to be verified, please check your email for verification code").
 						Send()
-				case resend:
-					token := utilities.Generate(4)
-
-					user.EmailVerifyToken = token
-					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
-
-					if err := cfg.store.UpdateOne(*user); err != nil {
-						utilities.JSON(w).
-							SetStatus(utilities.ResponseFail).
-							SetStatusCode(http.StatusBadRequest).
-							SetMessage(err.Error()).
-							Send()
-						return
-					}
-					if err := cfg.notify(user.Email, token); err != nil {
-						utilities.JSON(w).
-							SetStatus(utilities.ResponseFail).
-							SetStatusCode(http.StatusBadRequest).
-							SetMessage(err.Error()).
-							Send()
-						return
-					}
-					utilities.JSON(w).
-						SetStatus(utilities.ResponseSuccess).
-						SetStatusCode(http.StatusOK).
-						SetMessage("your verification code has been resent").
-						Send()
+				
 				default:
 					//validate Password
 					if err := cfg.hash.compare(body.Password, user.PasswordSalt, user.Password); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					user.LastLogin = time.Now().UTC().Unix()
+					if err := cfg.store.Save(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusInternalServerError).
 							SetMessage(err.Error()).
 							Send()
 						return
@@ -163,7 +152,58 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 				}
 
 			})
-			r.Post("/register", func(w http.ResponseWriter, r *http.Request) {})
+			r.Post("/register", func(w http.ResponseWriter, r *http.Request) {
+				var body registerRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusInternalServerError).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+
+				//validate user data.
+
+                //store validated user
+				user := models.User{
+					Email:        body.Email,
+					PasswordSalt: utilities.Generate(16),
+
+					EmailVerifyToken:          utilities.Generate(4),
+					EmailVerifyTokenExpiresAt: time.Now().Add(time.Hour * 2).UTC(),
+				}
+
+                //hash passwords
+				hashedPassword := cfg.hash.hash(body.Password, user.PasswordSalt)
+				user.Password = hashedPassword
+
+                //persist user data
+				if err := cfg.store.Save(user); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusInternalServerError).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+
+                //send notification with token
+				if err := cfg.notify(user.Email, user.EmailVerifyToken); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseFail).
+						SetStatusCode(http.StatusBadRequest).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+				utilities.JSON(w).
+					SetStatus(utilities.ResponseSuccess).
+					SetStatusCode(http.StatusOK).
+					SetMessage("your verification code has been resent").
+					Send()
+
+			})
 			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {})
 			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {})
 		},
