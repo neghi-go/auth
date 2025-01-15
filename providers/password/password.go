@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os/user"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +35,11 @@ type registerRequest struct {
 type resetPasswordRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type verifyEmailRequest struct {
+	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 type Option func(*PasswordProviderConfig)
@@ -120,7 +124,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 						SetStatusCode(http.StatusOK).
 						SetMessage("your email is yet to be verified, please check your email for verification code").
 						Send()
-				
+
 				default:
 					//validate Password
 					if err := cfg.hash.compare(body.Password, user.PasswordSalt, user.Password); err != nil {
@@ -165,7 +169,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 
 				//validate user data.
 
-                //store validated user
+				//store validated user
 				user := models.User{
 					Email:        body.Email,
 					PasswordSalt: utilities.Generate(16),
@@ -174,11 +178,11 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					EmailVerifyTokenExpiresAt: time.Now().Add(time.Hour * 2).UTC(),
 				}
 
-                //hash passwords
+				//hash passwords
 				hashedPassword := cfg.hash.hash(body.Password, user.PasswordSalt)
 				user.Password = hashedPassword
 
-                //persist user data
+				//persist user data
 				if err := cfg.store.Save(user); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
@@ -188,7 +192,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					return
 				}
 
-                //send notification with token
+				//send notification with token
 				if err := cfg.notify(user.Email, user.EmailVerifyToken); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -205,7 +209,113 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 
 			})
 			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {})
-			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {})
+			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {
+				action := r.URL.Query().Get("action")
+				var body verifyEmailRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusInternalServerError).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+
+				user, err := cfg.store.
+					Filter(database.SetParams(database.SetFilter("email", body.Email))).
+					First()
+				if err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseFail).
+						SetStatusCode(http.StatusBadRequest).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+				switch Action(action) {
+				case resend:
+					token := utilities.Generate(4)
+
+					user.EmailVerifyToken = token
+					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
+
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					if err := cfg.notify(user.Email, token); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("your verification code has been resent").
+						Send()
+				default:
+					if body.Token != user.EmailVerifyToken {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage("invalid verification token").
+							Send()
+						return
+					}
+					if time.Now().UTC().Unix() > user.EmailVerifyTokenExpiresAt.Unix() {
+						user.EmailVerifyToken = utilities.Generate(4)
+						user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
+						if err := cfg.store.UpdateOne(*user); err != nil {
+							utilities.JSON(w).
+								SetStatus(utilities.ResponseFail).
+								SetStatusCode(http.StatusBadRequest).
+								SetMessage(err.Error()).
+								Send()
+							return
+						}
+						if err := cfg.notify(user.Email, user.EmailVerifyToken); err != nil {
+							utilities.JSON(w).
+								SetStatus(utilities.ResponseFail).
+								SetStatusCode(http.StatusBadRequest).
+								SetMessage(err.Error()).
+								Send()
+							return
+						}
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage("token is expired, a new one has been sent to your mail").
+							Send()
+						return
+					}
+
+					user.EmailVerifyToken = ""
+					user.EmailVerified = true
+					user.EmailVerifyTokenExpiresAt = time.Time{}
+					user.EmailVerifiedAt = time.Now().UTC()
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+                        SetMessage("email successfully verified, redirect to login").
+						Send()
+				}
+			})
 		},
 	}
 }

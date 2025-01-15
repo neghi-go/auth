@@ -10,6 +10,7 @@ type User struct {
 
 	Email                     string    `json:"email" db:"email,index,required"`
 	EmailVerified             bool      `json:"email_verified" db:"email_verified"`
+	EmailVerifiedAt           time.Time `json:"email_verified_at" db:"email_verified_at"`
 	EmailVerifyToken          string    `json:"-" db:"email_verify_token"`
 	EmailVerifyTokenExpiresAt time.Time `json:"-" db:"email_verify_token_expires_at"`
 
@@ -17,7 +18,6 @@ type User struct {
 	PasswordSalt                 string    `json:"-" db:"password_salt"`
 	PasswordResetToken           string    `json:"-" db:"password_reset_token"`
 	PasswordVerifyTokenExpiresAt time.Time `json:"-" db:"password_reset_token_expires"`
-
 
 	LastLogin int64 `json:"last_login" db:"last_login,required"`
 }
