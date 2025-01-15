@@ -20,6 +20,7 @@ type Action string
 const (
 	verify Action = "verify"
 	resend Action = "resend"
+	reset  Action = "reset"
 )
 
 type loginRequest struct {
@@ -33,8 +34,9 @@ type registerRequest struct {
 }
 
 type resetPasswordRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email       string `json:"email"`
+	Token       string `json:"token"`
+	NewPassword string `json:"password"`
 }
 
 type verifyEmailRequest struct {
@@ -208,7 +210,112 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					Send()
 
 			})
-			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {})
+			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {
+				action := r.URL.Query().Get("action")
+				var body resetPasswordRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusInternalServerError).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+				user, err := cfg.store.WithContext(r.Context()).
+					Filter(database.SetParams(database.SetFilter("email", body.Email))).First()
+				if err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseFail).
+						SetStatusCode(http.StatusBadRequest).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+
+				switch Action(action) {
+				case reset:
+					token := utilities.Generate(6)
+					user.PasswordResetToken = token
+					user.PasswordResetTokenExpiresAt = time.Now().Add(time.Hour * 1).UTC()
+
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					if err := cfg.notify(user.Email, token); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("your reset code has been sent").
+						Send()
+				default:
+					if body.Token != user.PasswordResetToken {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage("invalid reset token").
+							Send()
+						return
+					}
+					if time.Now().UTC().Unix() > user.PasswordResetTokenExpiresAt.Unix() {
+						user.PasswordResetToken = utilities.Generate(6)
+						user.PasswordResetTokenExpiresAt = time.Now().Add(time.Hour * 1).UTC()
+						if err := cfg.store.UpdateOne(*user); err != nil {
+							utilities.JSON(w).
+								SetStatus(utilities.ResponseFail).
+								SetStatusCode(http.StatusBadRequest).
+								SetMessage(err.Error()).
+								Send()
+							return
+						}
+						if err := cfg.notify(user.Email, user.EmailVerifyToken); err != nil {
+							utilities.JSON(w).
+								SetStatus(utilities.ResponseFail).
+								SetStatusCode(http.StatusBadRequest).
+								SetMessage(err.Error()).
+								Send()
+							return
+						}
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage("token is expired, a new one has been sent to your mail").
+							Send()
+						return
+					}
+
+					user.PasswordResetToken = ""
+                    user.PasswordSalt = utilities.Generate(16)
+					user.Password = cfg.hash.hash(body.NewPassword, user.PasswordSalt)
+                    user.PasswordUpdatedOn = time.Now().UTC()
+
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("password changed, redirect to login").
+						Send()
+				}
+			})
 			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {
 				action := r.URL.Query().Get("action")
 				var body verifyEmailRequest
@@ -312,7 +419,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseSuccess).
 						SetStatusCode(http.StatusOK).
-                        SetMessage("email successfully verified, redirect to login").
+						SetMessage("email successfully verified, redirect to login").
 						Send()
 				}
 			})

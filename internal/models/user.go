@@ -14,10 +14,11 @@ type User struct {
 	EmailVerifyToken          string    `json:"-" db:"email_verify_token"`
 	EmailVerifyTokenExpiresAt time.Time `json:"-" db:"email_verify_token_expires_at"`
 
-	Password                     string    `json:"-" db:"password"`
-	PasswordSalt                 string    `json:"-" db:"password_salt"`
-	PasswordResetToken           string    `json:"-" db:"password_reset_token"`
-	PasswordVerifyTokenExpiresAt time.Time `json:"-" db:"password_reset_token_expires"`
+	Password                    string    `json:"-" db:"password"`
+	PasswordSalt                string    `json:"-" db:"password_salt"`
+	PasswordResetToken          string    `json:"-" db:"password_reset_token"`
+	PasswordResetTokenExpiresAt time.Time `json:"-" db:"password_reset_token_expires"`
+    PasswordUpdatedOn           time.Time `json:"-" db:"password_updated_on"`
 
 	LastLogin int64 `json:"last_login" db:"last_login,required"`
 }
