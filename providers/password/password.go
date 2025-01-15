@@ -1,47 +1,50 @@
 package password
 
 import (
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/auth"
-	"github.com/neghi-go/auth/storage"
+	"github.com/neghi-go/auth/internal/models"
+	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
-	_ "golang.org/x/crypto/argon2"
-	_ "golang.org/x/crypto/bcrypt"
-	_ "golang.org/x/crypto/scrypt"
+	"golang.org/x/crypto/argon2"
 )
 
 type Action string
 
 const (
-	resend   Action = "resend"
-	validate Action = "validate"
+	verify Action = "verify"
+	resend Action = "resend"
 )
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type ResetPasswordRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
 
 type Option func(*PasswordProviderConfig)
 
-type User struct {
-	ID                        string `json:"id"`
-	Email                     string `json:"email"`
-	EmailVerifyToken          string `json:"-"`
-	EmailVerifyTokenExpires   time.Time
-	PasswordResetToken        string
-	PasswordResetTokenExpires time.Time
-	Password                  string `json:"password"`
-	LastLogin                 int64  `json:"last_login"`
-}
-
 type PasswordProviderConfig struct {
 	hash    Hasher
-	store   storage.Store
+	store   database.Model[models.User]
 	notify  func(email, token string) error
 	encrypt *auth.Encrypt
 }
 
 func Config(opts ...Option) *PasswordProviderConfig {
-	cfg := &PasswordProviderConfig{}
+	cfg := &PasswordProviderConfig{
+		hash: &argonHasher{},
+	}
 
 	for _, opt := range opts {
 		opt(cfg)
@@ -54,216 +57,133 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: "password",
 		Init: func(r chi.Router) {
-			r.Post("/password/login", login(cfg))
-			r.Post("/password/register", register(cfg))
-            r.Post("/password/register/:token", register(cfg))
-			r.Post("/password/reset-password", reset(cfg))
-            r.Post("/password/reset-password/:token", reset(cfg))
-			r.Post("/logout", logout())
+			r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
+				action := r.URL.Query().Get("action")
+				var body loginRequest
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusInternalServerError).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+				//fetch user
+				user, err := cfg.store.WithContext(r.Context()).
+					Filter(database.SetParams(database.SetFilter("email", body.Email))).
+					First()
+				if err != nil {
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseFail).
+						SetStatusCode(http.StatusBadRequest).
+						SetMessage(err.Error()).
+						Send()
+					return
+				}
+
+				//check if user email is verified
+				if !user.EmailVerified {
+					action = string(verify)
+				}
+
+				switch Action(action) {
+				case verify:
+					token := utilities.Generate(4)
+
+					user.EmailVerifyToken = token
+					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
+
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					if err := cfg.notify(user.Email, token); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("your email is yet to be verified, please check your email for verification code").
+						Send()
+				case resend:
+					token := utilities.Generate(4)
+
+					user.EmailVerifyToken = token
+					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
+
+					if err := cfg.store.UpdateOne(*user); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					if err := cfg.notify(user.Email, token); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("your verification code has been resent").
+						Send()
+				default:
+					//validate Password
+					if err := cfg.hash.compare(body.Password, user.PasswordSalt, user.Password); err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
+
+					//create session, either JWT or Cookie and send to user
+
+					utilities.JSON(w).
+						SetStatus(utilities.ResponseSuccess).
+						SetStatusCode(http.StatusOK).
+						SetMessage("successfull login attempt").
+						SetData(user).
+						Send()
+				}
+
+			})
+			r.Post("/register", func(w http.ResponseWriter, r *http.Request) {})
+			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {})
+			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {})
 		},
 	}
 }
 
-func login(cfg *PasswordProviderConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		res := utilities.JSON(w)
-		err := r.ParseForm()
-		if err != nil {
-			res.
-				SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-		}
-
-		email := r.Form.Get("email")
-		password := r.Form.Get("password")
-
-		data, _ := cfg.store.Get(r.Context(), email)
-
-		user := User{}
-		err = auth.GobDecode(data, &user)
-		if err != nil {
-			res.
-				SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-		}
-
-		err = cfg.hash.compare(password, user.Password)
-		if err != nil {
-			res.
-				SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-		}
-
-		user.LastLogin = time.Now().UTC().Unix()
-		b, _ := auth.GobEncode(user)
-		err = cfg.store.Set(r.Context(), b)
-		if err != nil {
-			res.
-				SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-		}
-
-		//create session either jwt  or cookie
-
-		res.SetStatus(utilities.ResponseSuccess).
-			SetStatusCode(http.StatusOK).
-			SetData(user).
-			Send()
-	}
-}
-
-func register(cfg *PasswordProviderConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		action := r.URL.Query().Get("action")
-		res := utilities.JSON(w)
-		err := r.ParseForm()
-		if err != nil {
-			res.
-				SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-		}
-
-		switch Action(action) {
-		case validate:
-			email := r.Form.Get("email")
-			_, err := cfg.store.Get(r.Context(), email)
-			if err != nil {
-				res.
-					SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-			}
-			tokenValue := map[string]any{
-				"email":  email,
-				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-			}
-			token, _ := cfg.encrypt.Encrypt(tokenValue)
-
-			_ = cfg.notify(email, token)
-
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				Send()
-
-		case resend:
-			email := r.Form.Get("email")
-			if _, err := cfg.store.Get(r.Context(), email); err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-			tokenValues := map[string]any{
-				"email":  email,
-				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-			}
-			token, _ := cfg.encrypt.Encrypt(tokenValues)
-			// send to user
-			_ = cfg.notify(email, token)
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				Send()
-		default:
-			token := r.URL.Query().Get("token")
-			if token == "" {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-			}
-			password := r.Form.Get("password")
-
-			tokenValues, _ := cfg.encrypt.Decrypt(token)
-			//validate parsed token
-			timestamp, _ := tokenValues["expiry"].(int64)
-			if time.Now().UTC().Unix() > timestamp {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage("validation token has expire, please try again").
-					Send()
-				return
-			}
-			email, _ := tokenValues["email"].(string)
-
-			user := User{
-				Email:     email,
-				Password:  password,
-				LastLogin: time.Now().UTC().Unix(),
-			}
-
-			u, _ := auth.GobEncode(user)
-
-			err = cfg.store.Set(r.Context(), u)
-			if err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-
-			// create  either jwt  or cookie session
-
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				SetData(user).
-				Send()
-		}
-	}
-}
-
-func logout() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {}
-}
-
-func reset(cfg *PasswordProviderConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		res := utilities.JSON(w)
-		err := r.ParseForm()
-		if err != nil {
-			res.SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusBadRequest).
-				Send()
-			return
-		}
-		action := r.URL.Query().Get("action")
-		switch Action(action) {
-		case resend:
-			email := r.Form.Get("email")
-			data, err := cfg.store.Get(r.Context(), email)
-			if err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-			user := &User{}
-			err = auth.GobDecode(data, &user)
-			if err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-		default:
-		}
-	}
-}
-
 type Hasher interface {
-	hash(password string, salt int) (string, error)
-	compare(password, compare string) error
+	hash(password string, salt string) string
+	compare(password, salt, compare string) error
 }
 
-type ArgonHasher struct {
-}
+type argonHasher struct{}
 
-func (a *ArgonHasher) hash(password string, salt int) (string, error) {
-	return "", nil
+func (a *argonHasher) hash(password string, salt string) string {
+	return string(argon2.IDKey([]byte(password), []byte(salt), 2, 19*1024, 1, 32))
 }
-func (a *ArgonHasher) compare(password string, compare string) error {
+func (a *argonHasher) compare(password, salt, compare string) error {
+	pass := argon2.IDKey([]byte(password), []byte(salt), 2, 19*1024, 1, 32)
+	if subtle.ConstantTimeCompare(pass, []byte(compare)) != 1 {
+		return errors.New("passwords don't Match")
+	}
 	return nil
 }
