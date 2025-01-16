@@ -105,7 +105,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					user.EmailVerifyToken = token
 					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
 
-					if err := cfg.store.UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -138,10 +139,11 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 						return
 					}
 					user.LastLogin = time.Now().UTC().Unix()
-					if err := cfg.store.Save(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
-							SetStatusCode(http.StatusInternalServerError).
+							SetStatusCode(http.StatusBadRequest).
 							SetMessage(err.Error()).
 							Send()
 						return
@@ -185,7 +187,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 				user.Password = hashedPassword
 
 				//persist user data
-				if err := cfg.store.Save(user); err != nil {
+				if err := cfg.store.WithContext(r.Context()).Save(user); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
 						SetStatusCode(http.StatusInternalServerError).
@@ -238,7 +240,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					user.PasswordResetToken = token
 					user.PasswordResetTokenExpiresAt = time.Now().Add(time.Hour * 1).UTC()
 
-					if err := cfg.store.UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -246,6 +249,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 							Send()
 						return
 					}
+
 					if err := cfg.notify(user.Email, token); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
@@ -271,7 +275,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					if time.Now().UTC().Unix() > user.PasswordResetTokenExpiresAt.Unix() {
 						user.PasswordResetToken = utilities.Generate(6)
 						user.PasswordResetTokenExpiresAt = time.Now().Add(time.Hour * 1).UTC()
-						if err := cfg.store.UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+							UpdateOne(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -296,11 +301,12 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					}
 
 					user.PasswordResetToken = ""
-                    user.PasswordSalt = utilities.Generate(16)
+					user.PasswordSalt = utilities.Generate(16)
 					user.Password = cfg.hash.hash(body.NewPassword, user.PasswordSalt)
-                    user.PasswordUpdatedOn = time.Now().UTC()
+					user.PasswordUpdatedOn = time.Now().UTC()
 
-					if err := cfg.store.UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -328,7 +334,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					return
 				}
 
-				user, err := cfg.store.
+				user, err := cfg.store.WithContext(r.Context()).
 					Filter(database.SetParams(database.SetFilter("email", body.Email))).
 					First()
 				if err != nil {
@@ -346,7 +352,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					user.EmailVerifyToken = token
 					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
 
-					if err := cfg.store.UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -379,7 +386,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					if time.Now().UTC().Unix() > user.EmailVerifyTokenExpiresAt.Unix() {
 						user.EmailVerifyToken = utilities.Generate(4)
 						user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Hour * 2).UTC()
-						if err := cfg.store.UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+							UpdateOne(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -407,7 +415,8 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					user.EmailVerified = true
 					user.EmailVerifyTokenExpiresAt = time.Time{}
 					user.EmailVerifiedAt = time.Now().UTC()
-					if err := cfg.store.UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
+						UpdateOne(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
