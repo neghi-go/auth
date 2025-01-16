@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/auth"
 	"github.com/neghi-go/auth/internal/models"
+	"github.com/neghi-go/auth/jwt"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
 )
@@ -25,9 +26,12 @@ type authenticateRequest struct {
 }
 
 type PasswordlessProviderConfig struct {
-	store   database.Model[models.User]
-	notify  func(email string, token string) error
-	encrypt *auth.Encrypt
+	issuer   string
+	audience string
+	store    database.Model[models.User]
+	notify   func(email string, token string) error
+	encrypt  *auth.Encrypt
+	jwt      *jwt.JWT
 }
 
 func New(cfg *PasswordlessProviderConfig) *auth.Provider {
@@ -81,7 +85,7 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 			}
 
 			user, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).First()
+				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst()
 			if err != nil {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
@@ -94,6 +98,21 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 				user.EmailVerified = true
 			}
 			// create session for user
+			//create session, either JWT or Cookie and send to user
+			jwtToken, err := cfg.jwt.Sign(*jwt.JWTClaims(
+				jwt.SetIssuer(cfg.issuer),
+				jwt.SetAudience(cfg.audience),
+				jwt.SetSubject(user.ID.String()),
+				jwt.SetExpiration(time.Now().Add(time.Hour*24*30)),
+			))
+			if err != nil {
+				utilities.JSON(w).
+					SetStatus(utilities.ResponseFail).
+					SetStatusCode(http.StatusBadRequest).
+					SetMessage(err.Error()).
+					Send()
+				return
+			}
 
 			//update user
 			if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", body.Email))).
@@ -107,10 +126,14 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 			}
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
+				SetData(map[string]interface{}{
+					"user":  user,
+					"token": string(jwtToken),
+				}).
 				Send()
 		case resend:
 			if _, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).First(); err != nil {
+				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst(); err != nil {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
 					SetMessage("user not found").
@@ -130,7 +153,7 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 		default:
 			//get user if it exist and generate session
 			if _, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).First(); err != nil {
+				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst(); err != nil {
 				if errors.Is(err, errors.New("doc not found")) {
 					if err := cfg.store.WithContext(r.Context()).Save(models.User{
 						Email: body.Email,

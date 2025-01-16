@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
@@ -32,7 +33,6 @@ type JWT struct {
 	algo        Algo
 	private_key *rsa.PrivateKey
 	public_key  any
-	issuer      string
 }
 
 func New(opts ...Options) (*JWT, error) {
@@ -115,13 +115,13 @@ func SetIssuer(val string) ClaimsOptions {
 
 func SetSubject(val string) ClaimsOptions {
 	return func(c *Claims) {
-		c.issuer = val
+		c.subject = val
 	}
 }
 
 func SetAudience(val string) ClaimsOptions {
 	return func(c *Claims) {
-		c.issuer = val
+		c.audience = val
 	}
 }
 
@@ -134,17 +134,17 @@ func SetExpiration(exp time.Time) ClaimsOptions {
 func (j *JWT) Sign(claim Claims) ([]byte, error) {
 	tok := jwt.New()
 
-	tok.Set(jwt.IssuerKey, claim.issuer)
-	tok.Set(jwt.IssuedAtKey, claim.issuedAt)
-	tok.Set(jwt.AudienceKey, claim.audience)
-	tok.Set(jwt.ExpirationKey, claim.exp)
-	tok.Set(jwt.SubjectKey, claim.subject)
+	_ = tok.Set(jwt.IssuerKey, claim.issuer)
+	_ = tok.Set(jwt.IssuedAtKey, claim.issuedAt)
+	_ = tok.Set(jwt.AudienceKey, claim.audience)
+	_ = tok.Set(jwt.ExpirationKey, claim.exp)
+	_ = tok.Set(jwt.SubjectKey, claim.subject)
 
 	for key, val := range claim.data {
-		tok.Set(key, val)
+		_ = tok.Set(key, val)
 	}
 
-	return jwt.Sign(tok, jwt.WithKey(j.algo, j.private_key))
+	return jwt.Sign(tok, jwt.WithKey(jwa.SignatureAlgorithm(j.algo), j.private_key))
 }
 
 func (j *JWT) Verify(tok string) (jwt.Token, error) {

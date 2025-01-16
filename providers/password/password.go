@@ -4,12 +4,15 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/neghi-go/auth"
 	"github.com/neghi-go/auth/internal/models"
+	"github.com/neghi-go/auth/jwt"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
@@ -47,15 +50,19 @@ type verifyEmailRequest struct {
 type Option func(*PasswordProviderConfig)
 
 type PasswordProviderConfig struct {
-	hash    Hasher
-	store   database.Model[models.User]
-	notify  func(email, token string) error
-	encrypt *auth.Encrypt
+	issuer   string
+	audience string
+	hash     Hasher
+	store    database.Model[models.User]
+	notify   func(email, token string) error
+	jwt      *jwt.JWT
 }
 
 func Config(opts ...Option) *PasswordProviderConfig {
 	cfg := &PasswordProviderConfig{
-		hash: &argonHasher{},
+		issuer:   "demo-issuer",
+		audience: "demo-audience",
+		hash:     &argonHasher{},
 	}
 
 	for _, opt := range opts {
@@ -63,6 +70,24 @@ func Config(opts ...Option) *PasswordProviderConfig {
 	}
 
 	return cfg
+}
+
+func withJWT(jwt *jwt.JWT) Option {
+	return func(ppc *PasswordProviderConfig) {
+		ppc.jwt = jwt
+	}
+}
+
+func withModel(userModel database.Model[models.User]) Option {
+	return func(ppc *PasswordProviderConfig) {
+		ppc.store = userModel
+	}
+}
+
+func withNotifier(notify func(email, token string) error) Option {
+	return func(ppc *PasswordProviderConfig) {
+		ppc.notify = notify
+	}
 }
 
 func New(cfg *PasswordProviderConfig) *auth.Provider {
@@ -83,7 +108,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 				//fetch user
 				user, err := cfg.store.WithContext(r.Context()).
 					Filter(database.SetParams(database.SetFilter("email", body.Email))).
-					First()
+					FindFirst()
 				if err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -150,12 +175,28 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					}
 
 					//create session, either JWT or Cookie and send to user
-
+					jwtToken, err := cfg.jwt.Sign(*jwt.JWTClaims(
+						jwt.SetIssuer(cfg.issuer),
+						jwt.SetAudience(cfg.audience),
+						jwt.SetSubject(user.ID.String()),
+						jwt.SetExpiration(time.Now().Add(time.Hour*24*30)),
+					))
+					if err != nil {
+						utilities.JSON(w).
+							SetStatus(utilities.ResponseFail).
+							SetStatusCode(http.StatusBadRequest).
+							SetMessage(err.Error()).
+							Send()
+						return
+					}
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseSuccess).
 						SetStatusCode(http.StatusOK).
 						SetMessage("successfull login attempt").
-						SetData(user).
+						SetData(map[string]interface{}{
+							"user":  user,
+							"token": string(jwtToken),
+						}).
 						Send()
 				}
 
@@ -166,7 +207,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
 						SetStatusCode(http.StatusInternalServerError).
-						SetMessage(err.Error()).
+						SetMessage(err.Error() + "unable to get user details").
 						Send()
 					return
 				}
@@ -175,6 +216,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 
 				//store validated user
 				user := models.User{
+					ID:           uuid.New(),
 					Email:        body.Email,
 					PasswordSalt: utilities.Generate(16),
 
@@ -224,7 +266,7 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 					return
 				}
 				user, err := cfg.store.WithContext(r.Context()).
-					Filter(database.SetParams(database.SetFilter("email", body.Email))).First()
+					Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst()
 				if err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -336,8 +378,9 @@ func New(cfg *PasswordProviderConfig) *auth.Provider {
 
 				user, err := cfg.store.WithContext(r.Context()).
 					Filter(database.SetParams(database.SetFilter("email", body.Email))).
-					First()
+					FindFirst()
 				if err != nil {
+					fmt.Print("here!")
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
 						SetStatusCode(http.StatusBadRequest).
