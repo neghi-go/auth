@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/auth"
-	"github.com/neghi-go/auth/internal/models"
 	"github.com/neghi-go/auth/jwt"
+	"github.com/neghi-go/auth/models"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
 )

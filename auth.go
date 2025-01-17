@@ -9,8 +9,10 @@ type Auth struct {
 	router    chi.Router
 }
 
-func New(opts ...Options) *Auth {
-	cfg := &Auth{}
+func New(r chi.Router, opts ...Options) *Auth {
+	cfg := &Auth{
+		router: r,
+	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
