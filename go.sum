@@ -97,6 +97,8 @@ github.com/neghi-go/database v0.0.4 h1:i87lFh48BpSHbCupdeaM01lzhmnfhWPliJ7XEwb5J
 github.com/neghi-go/database v0.0.4/go.mod h1:rJwRfXvhrnQaDppB88PChOC5ft7zcwB1mpEP1edqv64=
 github.com/neghi-go/database v0.0.5 h1:/ZG5qzXbfZ/ccZ26lokk1sBusx5ulVovg2jnsX6t99Y=
 github.com/neghi-go/database v0.0.5/go.mod h1:rJwRfXvhrnQaDppB88PChOC5ft7zcwB1mpEP1edqv64=
+github.com/neghi-go/database v0.0.6 h1:Nf+A1IUCjmmJbWIqBBhReY/ocOldOphS+eRaOvjnMYo=
+github.com/neghi-go/database v0.0.6/go.mod h1:rJwRfXvhrnQaDppB88PChOC5ft7zcwB1mpEP1edqv64=
 github.com/neghi-go/utilities v0.0.3 h1:djaH9cc7ELzt/2Oi6v9x4R7jtN0i5q4tZbJOS9BgWXE=
 github.com/neghi-go/utilities v0.0.3/go.mod h1:cqbvvQw0y1UnEODwitwiaM/Il92nzQ8colfKkbE8dsw=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
