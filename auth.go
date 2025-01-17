@@ -1,13 +1,12 @@
 package auth
 
-import "github.com/neghi-go/auth/jwt"
+import "github.com/go-chi/chi/v5"
 
 type Options func(*Auth)
 
 type Auth struct {
-	secret    string
-	providers map[string]Provider
-	jwt       *jwt.JWT
+	providers []*Provider
+	router    chi.Router
 }
 
 func New(opts ...Options) *Auth {
@@ -18,14 +17,15 @@ func New(opts ...Options) *Auth {
 	return cfg
 }
 
-func RegisterProvider(name string, provider Provider) Options {
+func RegisterProvider(provider *Provider) Options {
 	return func(a *Auth) {
-		a.providers[name] = provider
+		a.providers = append(a.providers, provider)
 	}
 }
 
-func WithSecret(secret string) Options {
-	return func(a *Auth) {
-		a.secret = secret
+func (a *Auth) Build() error {
+	for _, p := range a.providers {
+		p.Init(a.router)
 	}
+	return nil
 }

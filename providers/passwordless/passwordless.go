@@ -2,7 +2,6 @@ package passwordless
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
@@ -25,7 +24,9 @@ type authenticateRequest struct {
 	Email string `json:"email"`
 }
 
-type PasswordlessProviderConfig struct {
+type Option func(*passwordlessProviderConfig)
+
+type passwordlessProviderConfig struct {
 	issuer   string
 	audience string
 	store    database.Model[models.User]
@@ -34,7 +35,33 @@ type PasswordlessProviderConfig struct {
 	jwt      *jwt.JWT
 }
 
-func New(cfg *PasswordlessProviderConfig) *auth.Provider {
+func WithJWT(jwt *jwt.JWT) Option {
+	return func(ppc *passwordlessProviderConfig) {
+		ppc.jwt = jwt
+	}
+}
+
+func WithStore(model database.Model[models.User]) Option {
+	return func(ppc *passwordlessProviderConfig) {
+		ppc.store = model
+	}
+}
+
+func WithNotifier(notifier func(email, token string) error) Option {
+	return func(ppc *passwordlessProviderConfig) {
+		ppc.notify = notifier
+	}
+}
+
+func New(opts ...Option) *auth.Provider {
+	cfg := &passwordlessProviderConfig{
+		issuer:   "default-issuer",
+		audience: "default-audience",
+		encrypt:  &auth.Encrypt{},
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
 	return &auth.Provider{
 		Type: "magic-link",
 		Init: func(r chi.Router) {
@@ -43,7 +70,7 @@ func New(cfg *PasswordlessProviderConfig) *auth.Provider {
 	}
 }
 
-func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
+func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body authenticateRequest
 		res := utilities.JSON(w)
@@ -154,28 +181,30 @@ func authorize(cfg *PasswordlessProviderConfig) http.HandlerFunc {
 			//get user if it exist and generate session
 			if _, err := cfg.store.WithContext(r.Context()).
 				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst(); err != nil {
-				if errors.Is(err, errors.New("doc not found")) {
-					if err := cfg.store.WithContext(r.Context()).Save(models.User{
-						Email: body.Email,
-					}); err != nil {
-						res.SetStatus(utilities.ResponseError).
-							SetStatusCode(http.StatusBadRequest).
-							Send()
-						return
-					}
+				user, err := models.NewUser().SetEmail(body.Email).Build()
+				if err != nil {
+					res.SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusBadRequest).
+						Send()
+				}
+				if err := cfg.store.WithContext(r.Context()).Save(*user); err != nil {
+					res.SetStatus(utilities.ResponseError).
+						SetStatusCode(http.StatusBadRequest).
+						Send()
+					return
 				}
 			}
-			tokenValues := map[string]any{
-				"email":  body.Email,
-				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-			}
-			token, _ := cfg.encrypt.Encrypt(tokenValues)
-			_ = cfg.notify(body.Email, token)
-
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				SetMessage("please check your email for authentication link").
-				Send()
 		}
+		tokenValues := map[string]any{
+			"email":  body.Email,
+			"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+		}
+		token, _ := cfg.encrypt.Encrypt(tokenValues)
+		_ = cfg.notify(body.Email, token)
+
+		res.SetStatus(utilities.ResponseSuccess).
+			SetStatusCode(http.StatusOK).
+			SetMessage("please check your email for authentication link").
+			Send()
 	}
 }

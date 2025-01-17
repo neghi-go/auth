@@ -45,9 +45,9 @@ type verifyEmailRequest struct {
 	Token string `json:"token"`
 }
 
-type Option func(*PasswordProviderConfig)
+type Option func(*passwordProviderConfig)
 
-type PasswordProviderConfig struct {
+type passwordProviderConfig struct {
 	issuer   string
 	audience string
 	hash     Hasher
@@ -56,8 +56,26 @@ type PasswordProviderConfig struct {
 	jwt      *jwt.JWT
 }
 
-func Config(opts ...Option) *PasswordProviderConfig {
-	cfg := &PasswordProviderConfig{
+func WithJWT(jwt *jwt.JWT) Option {
+	return func(ppc *passwordProviderConfig) {
+		ppc.jwt = jwt
+	}
+}
+
+func WithStore(userModel database.Model[models.User]) Option {
+	return func(ppc *passwordProviderConfig) {
+		ppc.store = userModel
+	}
+}
+
+func WithNotifier(notify func(email, token string) error) Option {
+	return func(ppc *passwordProviderConfig) {
+		ppc.notify = notify
+	}
+}
+
+func New(opts ...Option) *auth.Provider {
+	cfg := &passwordProviderConfig{
 		issuer:   "demo-issuer",
 		audience: "demo-audience",
 		hash:     &argonHasher{},
@@ -66,29 +84,6 @@ func Config(opts ...Option) *PasswordProviderConfig {
 	for _, opt := range opts {
 		opt(cfg)
 	}
-
-	return cfg
-}
-
-func withJWT(jwt *jwt.JWT) Option {
-	return func(ppc *PasswordProviderConfig) {
-		ppc.jwt = jwt
-	}
-}
-
-func withModel(userModel database.Model[models.User]) Option {
-	return func(ppc *PasswordProviderConfig) {
-		ppc.store = userModel
-	}
-}
-
-func withNotifier(notify func(email, token string) error) Option {
-	return func(ppc *PasswordProviderConfig) {
-		ppc.notify = notify
-	}
-}
-
-func New(cfg *PasswordProviderConfig) *auth.Provider {
 	return &auth.Provider{
 		Type: "password",
 		Init: func(r chi.Router) {
