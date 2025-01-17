@@ -194,17 +194,18 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 					return
 				}
 			}
-		}
-		tokenValues := map[string]any{
-			"email":  body.Email,
-			"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-		}
-		token, _ := cfg.encrypt.Encrypt(tokenValues)
-		_ = cfg.notify(body.Email, token)
+			tokenValues := map[string]any{
+				"email":  body.Email,
+				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+			}
+			token, _ := cfg.encrypt.Encrypt(tokenValues)
+			_ = cfg.notify(body.Email, token)
 
-		res.SetStatus(utilities.ResponseSuccess).
-			SetStatusCode(http.StatusOK).
-			SetMessage("please check your email for authentication link").
-			Send()
+			res.SetStatus(utilities.ResponseSuccess).
+				SetStatusCode(http.StatusOK).
+				SetMessage("please check your email for authentication link").
+				Send()
+		}
+
 	}
 }
