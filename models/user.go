@@ -20,7 +20,7 @@ var (
 type User struct {
 	ID uuid.UUID `json:"id" db:"id,index,required,unique"`
 
-	Email                     string    `json:"email" db:"email,index,required"`
+	Email                     string    `json:"email" db:"email,unique,index,required"`
 	EmailVerified             bool      `json:"email_verified" db:"email_verified"`
 	EmailVerifiedAt           time.Time `json:"email_verified_at" db:"email_verified_at"`
 	EmailVerifyToken          string    `json:"-" db:"email_verify_token"`

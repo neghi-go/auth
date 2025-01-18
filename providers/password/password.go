@@ -2,8 +2,10 @@ package password
 
 import (
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -220,6 +222,7 @@ func New(opts ...Option) *auth.Provider {
 
 				//hash passwords
 				hashedPassword := cfg.hash.hash(body.Password, user.PasswordSalt)
+				fmt.Println(hashedPassword)
 				user.Password = hashedPassword
 
 				//persist user data
@@ -466,6 +469,7 @@ func New(opts ...Option) *auth.Provider {
 					user.EmailVerifyToken = ""
 					user.EmailVerified = true
 					user.EmailVerifyTokenExpiresAt = time.Time{}
+					user.EmailVerifyTokenCreatedAt = time.Time{}
 					user.EmailVerifiedAt = time.Now().UTC()
 					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
 						UpdateOne(*user); err != nil {
@@ -496,11 +500,12 @@ type Hasher interface {
 type argonHasher struct{}
 
 func (a *argonHasher) hash(password string, salt string) string {
-	return string(argon2.IDKey([]byte(password), []byte(salt), 2, 19*1024, 1, 32))
+	buf := argon2.IDKey([]byte(password), []byte(salt), 2, 19*1024, 1, 32)
+	return base64.RawStdEncoding.EncodeToString(buf)
 }
 func (a *argonHasher) compare(password, salt, compare string) error {
-	pass := argon2.IDKey([]byte(password), []byte(salt), 2, 19*1024, 1, 32)
-	if subtle.ConstantTimeCompare(pass, []byte(compare)) != 1 {
+	pass := a.hash(password, salt)
+	if subtle.ConstantTimeCompare([]byte(pass), []byte(compare)) != 1 {
 		return errors.New("passwords don't Match")
 	}
 	return nil
