@@ -76,7 +76,7 @@ func TestPasswordless(t *testing.T) {
 				t.Error(err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/magic-link/authorize", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
@@ -93,7 +93,7 @@ func TestPasswordless(t *testing.T) {
 				t.Error(err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/magic-link/authorize?action=resend", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize?action=resend", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
@@ -111,7 +111,7 @@ func TestPasswordless(t *testing.T) {
 				t.Error(err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/magic-link/authorize?action=authenticate&token="+auth_token, &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize?action=authenticate&token="+auth_token, &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)

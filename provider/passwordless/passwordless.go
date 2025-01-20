@@ -9,6 +9,7 @@ import (
 	"github.com/neghi-go/auth"
 	"github.com/neghi-go/auth/jwt"
 	"github.com/neghi-go/auth/models"
+	"github.com/neghi-go/auth/provider"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
 )
@@ -53,7 +54,7 @@ func WithNotifier(notifier func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *auth.Provider {
+func New(opts ...Option) *provider.Provider {
 	cfg := &passwordlessProviderConfig{
 		issuer:   "default-issuer",
 		audience: "default-audience",
@@ -62,10 +63,10 @@ func New(opts ...Option) *auth.Provider {
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &auth.Provider{
+	return &provider.Provider{
 		Type: "magic-link",
 		Init: func(r chi.Router) {
-			r.Post("/magic-link/authorize", authorize(cfg))
+			r.Post("/authorize", authorize(cfg))
 		},
 	}
 }

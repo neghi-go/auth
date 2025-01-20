@@ -1,11 +1,14 @@
 package auth
 
-import "github.com/go-chi/chi/v5"
+import (
+	"github.com/go-chi/chi/v5"
+	"github.com/neghi-go/auth/provider"
+)
 
 type Options func(*Auth)
 
 type Auth struct {
-	providers []*Provider
+	providers []*provider.Provider
 	router    chi.Router
 }
 
@@ -19,7 +22,7 @@ func New(r chi.Router, opts ...Options) *Auth {
 	return cfg
 }
 
-func RegisterProvider(provider *Provider) Options {
+func RegisterProvider(provider *provider.Provider) Options {
 	return func(a *Auth) {
 		a.providers = append(a.providers, provider)
 	}

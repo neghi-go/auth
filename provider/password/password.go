@@ -5,14 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth"
 	"github.com/neghi-go/auth/jwt"
 	"github.com/neghi-go/auth/models"
+	"github.com/neghi-go/auth/provider"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
@@ -76,7 +75,7 @@ func WithNotifier(notify func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *auth.Provider {
+func New(opts ...Option) *provider.Provider {
 	cfg := &passwordProviderConfig{
 		issuer:   "demo-issuer",
 		audience: "demo-audience",
@@ -86,7 +85,7 @@ func New(opts ...Option) *auth.Provider {
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &auth.Provider{
+	return &provider.Provider{
 		Type: "password",
 		Init: func(r chi.Router) {
 			r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +221,6 @@ func New(opts ...Option) *auth.Provider {
 
 				//hash passwords
 				hashedPassword := cfg.hash.hash(body.Password, user.PasswordSalt)
-				fmt.Println(hashedPassword)
 				user.Password = hashedPassword
 
 				//persist user data
@@ -467,6 +465,7 @@ func New(opts ...Option) *auth.Provider {
 					}
 
 					user.EmailVerifyToken = ""
+					user.EmailVerifyAttempt = 0
 					user.EmailVerified = true
 					user.EmailVerifyTokenExpiresAt = time.Time{}
 					user.EmailVerifyTokenCreatedAt = time.Time{}
