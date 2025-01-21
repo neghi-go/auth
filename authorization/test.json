@@ -1,0 +1,14 @@
+[
+  {
+    "subject": "user",
+    "actions": ["*"],
+    "resource": "/",
+    "environment": "time"
+  },
+  {
+    "subject": "admin",
+    "actions": ["*"],
+    "resource": "/admin",
+    "environment": "time"
+  }
+]

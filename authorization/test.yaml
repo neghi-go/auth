@@ -1,0 +1,10 @@
+- subject: "user"
+  actions:
+    - "*"
+  resource: "/"
+  environment: "test"
+- subject: "admin"
+  actions:
+    - "*"
+  resource: "/admin"
+  environment: "test"
