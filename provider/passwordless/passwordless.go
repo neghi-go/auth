@@ -113,7 +113,7 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 			}
 
 			user, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst()
+				Query(database.WithFilter("email", body.Email)).First()
 			if err != nil {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
@@ -143,8 +143,8 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 			}
 
 			//update user
-			if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", body.Email))).
-				UpdateOne(*user); err != nil {
+			if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", body.Email)).
+				Update(*user); err != nil {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
 					SetMessage("user not updated").
@@ -161,7 +161,7 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 				Send()
 		case resend:
 			if _, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst(); err != nil {
+				Query(database.WithFilter("email", body.Email)).First(); err != nil {
 				res.SetStatus(utilities.ResponseError).
 					SetStatusCode(http.StatusBadRequest).
 					SetMessage("user not found").
@@ -181,7 +181,7 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 		default:
 			//get user if it exist and generate session
 			if _, err := cfg.store.WithContext(r.Context()).
-				Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst(); err != nil {
+				Query(database.WithFilter("email", body.Email)).First(); err != nil {
 				user, err := models.NewUser().SetEmail(body.Email).Build()
 				if err != nil {
 					res.SetStatus(utilities.ResponseError).

@@ -36,6 +36,8 @@ type User struct {
 	PasswordResetTokenExpiresAt time.Time `json:"-" db:"password_reset_token_expires"`
 	PasswordUpdatedOn           time.Time `json:"-" db:"password_updated_on"`
 
+	Role string `json:"role" db:"role"`
+
 	LastLogin int64 `json:"last_login" db:"last_login,required"`
 }
 

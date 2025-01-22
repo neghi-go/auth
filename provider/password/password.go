@@ -101,8 +101,8 @@ func New(opts ...Option) *provider.Provider {
 				}
 				//fetch user
 				user, err := cfg.store.WithContext(r.Context()).
-					Filter(database.SetParams(database.SetFilter("email", body.Email))).
-					FindFirst()
+					Query(database.WithFilter("email", body.Email)).
+					First()
 				if err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -120,8 +120,8 @@ func New(opts ...Option) *provider.Provider {
 				switch Action(action) {
 				case verify:
 					user = user.GenerateEmailVerifyToken()
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -154,8 +154,8 @@ func New(opts ...Option) *provider.Provider {
 						return
 					}
 					user.LastLogin = time.Now().UTC().Unix()
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -261,7 +261,7 @@ func New(opts ...Option) *provider.Provider {
 					return
 				}
 				user, err := cfg.store.WithContext(r.Context()).
-					Filter(database.SetParams(database.SetFilter("email", body.Email))).FindFirst()
+					Query(database.WithFilter("email", body.Email)).First()
 				if err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -275,8 +275,8 @@ func New(opts ...Option) *provider.Provider {
 				case reset:
 					user = user.GeneratePasswordResetToken()
 
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -301,8 +301,8 @@ func New(opts ...Option) *provider.Provider {
 				default:
 					if body.Token != user.PasswordResetToken {
 						user.PasswordResetAttempt += 1
-						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-							UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+							Update(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -320,8 +320,8 @@ func New(opts ...Option) *provider.Provider {
 					if time.Now().UTC().Unix() > user.PasswordResetTokenExpiresAt.Unix() {
 						user.PasswordResetAttempt = 0
 						user = user.GeneratePasswordResetToken()
-						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-							UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+							Update(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -352,8 +352,8 @@ func New(opts ...Option) *provider.Provider {
 					user.PasswordResetAttempt = 0
 					user.PasswordResetTokenCreatedAt = time.Time{}
 
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -382,8 +382,8 @@ func New(opts ...Option) *provider.Provider {
 				}
 
 				user, err := cfg.store.WithContext(r.Context()).
-					Filter(database.SetParams(database.SetFilter("email", body.Email))).
-					FindFirst()
+					Query(database.WithFilter("email", body.Email)).
+					First()
 				if err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseFail).
@@ -395,8 +395,8 @@ func New(opts ...Option) *provider.Provider {
 				switch Action(action) {
 				case resend:
 					user = user.GenerateEmailVerifyToken()
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).
@@ -420,8 +420,8 @@ func New(opts ...Option) *provider.Provider {
 				default:
 					if body.Token != user.EmailVerifyToken {
 						user.EmailVerifyAttempt += 1
-						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-							UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+							Update(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -439,8 +439,8 @@ func New(opts ...Option) *provider.Provider {
 					if time.Now().UTC().Unix() > user.EmailVerifyTokenExpiresAt.Unix() {
 						user.EmailVerifyAttempt = 0
 						user = user.GenerateEmailVerifyToken()
-						if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-							UpdateOne(*user); err != nil {
+						if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+							Update(*user); err != nil {
 							utilities.JSON(w).
 								SetStatus(utilities.ResponseFail).
 								SetStatusCode(http.StatusBadRequest).
@@ -470,8 +470,8 @@ func New(opts ...Option) *provider.Provider {
 					user.EmailVerifyTokenExpiresAt = time.Time{}
 					user.EmailVerifyTokenCreatedAt = time.Time{}
 					user.EmailVerifiedAt = time.Now().UTC()
-					if err := cfg.store.WithContext(r.Context()).Filter(database.SetParams(database.SetFilter("email", user.Email))).
-						UpdateOne(*user); err != nil {
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", user.Email)).
+						Update(*user); err != nil {
 						utilities.JSON(w).
 							SetStatus(utilities.ResponseFail).
 							SetStatusCode(http.StatusBadRequest).

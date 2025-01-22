@@ -1,10 +1,5 @@
-- subject: "user"
-  actions:
-    - "*"
-  resource: "/"
-  environment: "test"
-- subject: "admin"
-  actions:
-    - "*"
-  resource: "/admin"
-  environment: "test"
+- id: "abd768e7-ab15-470b-852f-e93b93a3dd91"
+  name: "admin-access"
+  condition:
+    - "user.role == \"admin\""
+  effect: 0
