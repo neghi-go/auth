@@ -4,28 +4,25 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth"
+	"github.com/neghi-go/auth/provider"
 )
 
-type Oauth struct {
-	AccessToken  string                 `json:"access_token"`
-	RefreshToken string                 `json:"refresh_token"`
-	IDToken      string                 `json:"id_token"`
-	Data         map[string]interface{} `json:"data"`
-}
+type Options func(*OauthProviderConfig)
 
 type endpoint struct {
-	token_url string
+	token_url    string
+	callback_url string
 }
 type OauthProviderConfig struct {
 	provider     string
 	clientID     string
 	clientSecret string
 	endpoint     endpoint
+	scopes       []string
 }
 
-func New(cfg *OauthProviderConfig) *auth.Provider {
-	return &auth.Provider{
+func New(cfg *OauthProviderConfig) *provider.Provider {
+	return &provider.Provider{
 		Type: cfg.provider + "-" + "oauth",
 		Init: func(r chi.Router) {
 			r.Get("/"+cfg.provider+"/authorize", authorize())

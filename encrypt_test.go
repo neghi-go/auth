@@ -19,7 +19,6 @@ func TestEncrypt_Encrypt(t *testing.T) {
 	res, err = e.Encrypt(val)
 	require.NoError(t, err)
 	require.NotZero(t, res)
-	t.Log(res)
 }
 
 func TestEncrypt_Decrypt(t *testing.T) {
@@ -28,5 +27,4 @@ func TestEncrypt_Decrypt(t *testing.T) {
 	data, err := e.Decrypt(res)
 	require.NoError(t, err)
 	require.NotZero(t, data)
-	t.Log(data)
 }
