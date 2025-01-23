@@ -1,5 +1,10 @@
 - id: "abd768e7-ab15-470b-852f-e93b93a3dd91"
   name: "admin-access"
+  resource:
+    - endpoint: "/resource"
+      method:
+        - "GET" 
+        - "POST"
   condition:
-    - "user.role == \"admin\""
-  effect: 0
+    - "subject:role:is:admin"
+  effect: "permit"

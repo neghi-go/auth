@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -13,27 +14,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Effect int
+type EnforcerKeywords string
 
 const (
-	Permit Effect = iota
-	Deny
+	IS      EnforcerKeywords = "is"
+	NOT     EnforcerKeywords = "not"
+	LESS    EnforcerKeywords = "less"
+	GREATER EnforcerKeywords = "greater"
 )
 
-var effectMap = map[Effect]string{
-	Permit: "permit",
-	Deny:   "deny",
-}
+type Effect string
+
+const (
+	Permit Effect = "permit"
+	Deny   Effect = "deny"
+)
 
 func (e Effect) String() string {
-	return effectMap[e]
+	return string(e)
 }
 
 type Policy struct {
-	ID        uuid.UUID `json:"id" yaml:"id" db:"id,unique,index"`
-	Name      string    `json:"name" yaml:"name" db:"name,index,unique"`
-	Condition []string  `json:"condition" yaml:"condition" db:"condition"`
-	Effect    Effect    `json:"effect" yaml:"effect" db:"effect"`
+	ID       uuid.UUID `json:"id" yaml:"id" db:"id,unique,index"`
+	Name     string    `json:"name" yaml:"name" db:"name,index,unique"`
+	Resource []struct {
+		Endpoint string   `json:"endpoint" yaml:"endpoint" db:"endpoint"`
+		Method   []Method `json:"method" yaml:"method" db:"method"`
+	} `json:"resource" yaml:"resource" db:"resource"` //  /resource  /resource/:id
+	Condition []string `json:"condition" yaml:"condition" db:"condition"` //<attribute:field:modifier:value>
+	Effect    Effect   `json:"effect" yaml:"effect" db:"effect"`
 }
 
 type PDPOptions func(*PolicyDecisionPoint)
@@ -97,24 +106,44 @@ func parseJSON(r io.Reader, val interface{}) error {
 
 func (pdp *PolicyDecisionPoint) Enforce(attr Attributes) Effect {
 	matched := matchPolicy(pdp, attr)
-
 	for _, m := range matched {
-		if ok := enforcePolicy(m, attr); ok {
-			return m.Effect
+		a, _ := parse(attr)
+		for _, c := range m.Condition {
+			if ok := enforcePolicy(c, a); ok {
+				return m.Effect
+			}
 		}
 	}
-
 	return Deny
 }
 
-func matchPolicy(policies *PolicyDecisionPoint, _ Attributes) []*Policy {
+func matchPolicy(policies *PolicyDecisionPoint, attr Attributes) []*Policy {
 	matched := make([]*Policy, 0)
 
-	for range policies.p {
+	for _, p := range policies.p {
+		//check if resources and Method match
+		for _, r := range p.Resource {
+			if ok := strings.Contains(r.Endpoint, attr.Resource.URL); ok {
+				if ok := slices.Contains(r.Method, attr.Resource.Method); ok {
+					matched = append(matched, p)
+				}
+			}
+		}
 	}
-
 	return matched
 }
-func enforcePolicy(_ *Policy, _ Attributes) bool {
-	return true
+func enforcePolicy(condition string, a map[string]interface{}) bool {
+	v := strings.Split(condition, ":")
+	modifier := v[2]
+	value := v[3]
+	key := strings.Join([]string{v[0], v[1]}, ":")
+
+	switch EnforcerKeywords(modifier) {
+	case IS:
+		return a[key] == value
+	case NOT:
+		return a[key] != value
+	default:
+		return false
+	}
 }
