@@ -6,10 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/neghi-go/iam/sessions/store"
 )
 
 type Algo string
@@ -30,9 +32,16 @@ func (a Algo) String() string {
 type Options func(*JWT)
 
 type JWT struct {
+	issuer      string
+	audience    string
+	expireTime  int64 //expiration time in seconds
 	algo        Algo
 	private_key *rsa.PrivateKey
 	public_key  any
+
+	token *jwt.Token
+
+	store store.Store
 }
 
 func New(opts ...Options) (*JWT, error) {
@@ -76,77 +85,42 @@ func WithPublicKey(public_key string) Options {
 	}
 }
 
-type ClaimsOptions func(*Claims)
-
-type Claims struct {
-	issuer   string
-	audience string
-	subject  string
-	issuedAt time.Time
-	exp      time.Time
-	data     map[string]interface{}
-}
-
-func JWTClaims(opts ...ClaimsOptions) *Claims {
-	claims := &Claims{
-		issuer:   "default-Issuer",
-		issuedAt: time.Now().Add(0).UTC(),
-		exp:      time.Now().Add(0).UTC(),
-		data:     make(map[string]interface{}),
-	}
-
-	for _, opt := range opts {
-		opt(claims)
-	}
-	return claims
-}
-
-func AddClaim(key string, val interface{}) ClaimsOptions {
-	return func(c *Claims) {
-		c.data[key] = val
+func SetIssuer(val string) Options {
+	return func(j *JWT) {
+		j.issuer = val
 	}
 }
 
-func SetIssuer(val string) ClaimsOptions {
-	return func(c *Claims) {
-		c.issuer = val
+func SetAudience(val string) Options {
+	return func(j *JWT) {
+		j.audience = val
 	}
 }
 
-func SetSubject(val string) ClaimsOptions {
-	return func(c *Claims) {
-		c.subject = val
+func SetExpiration(exp int64) Options {
+	return func(j *JWT) {
+		j.expireTime = exp
 	}
 }
 
-func SetAudience(val string) ClaimsOptions {
-	return func(c *Claims) {
-		c.audience = val
-	}
-}
-
-func SetExpiration(exp time.Time) ClaimsOptions {
-	return func(c *Claims) {
-		c.exp = exp
-	}
-}
-
-func (j *JWT) Sign(claim Claims) ([]byte, error) {
+func (j *JWT) Generate(w http.ResponseWriter, subject string, params ...interface{}) error {
 	tok := jwt.New()
+	_ = tok.Set(jwt.IssuerKey, j.issuer)
+	_ = tok.Set(jwt.IssuedAtKey, time.Now().UTC())
+	_ = tok.Set(jwt.AudienceKey, j.audience)
+	_ = tok.Set(jwt.ExpirationKey, time.Now().Add(time.Second*time.Duration(j.expireTime)).UTC())
+	_ = tok.Set(jwt.SubjectKey, subject)
 
-	_ = tok.Set(jwt.IssuerKey, claim.issuer)
-	_ = tok.Set(jwt.IssuedAtKey, claim.issuedAt)
-	_ = tok.Set(jwt.AudienceKey, claim.audience)
-	_ = tok.Set(jwt.ExpirationKey, claim.exp)
-	_ = tok.Set(jwt.SubjectKey, claim.subject)
-
-	for key, val := range claim.data {
-		_ = tok.Set(key, val)
+	to, err := jwt.Sign(tok, jwt.WithKey(jwa.SignatureAlgorithm(j.algo), j.private_key))
+	if err != nil {
+		return err
 	}
-
-	return jwt.Sign(tok, jwt.WithKey(jwa.SignatureAlgorithm(j.algo), j.private_key))
+	w.Header().Set("Auth-Token", string(to))
+	return nil
 }
 
 func (j *JWT) Verify(tok string) (jwt.Token, error) {
 	return jwt.Parse([]byte(tok), jwt.WithKey(j.algo, j.public_key))
 }
+
+func (j *JWT) Validate(key string) error { return nil }

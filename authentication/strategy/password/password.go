@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/authentication/strategy"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/sessions/jwt"
+	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
 )
@@ -49,18 +49,9 @@ type verifyEmailRequest struct {
 type Option func(*passwordProviderConfig)
 
 type passwordProviderConfig struct {
-	issuer   string
-	audience string
-	hash     Hasher
-	store    database.Model[models.User]
-	notify   func(email, token string) error
-	jwt      *jwt.JWT
-}
-
-func WithJWT(jwt *jwt.JWT) Option {
-	return func(ppc *passwordProviderConfig) {
-		ppc.jwt = jwt
-	}
+	hash   Hasher
+	store  database.Model[models.User]
+	notify func(email, token string) error
 }
 
 func WithStore(userModel database.Model[models.User]) Option {
@@ -75,19 +66,17 @@ func WithNotifier(notify func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *provider.Provider {
+func New(opts ...Option) *strategy.Provider {
 	cfg := &passwordProviderConfig{
-		issuer:   "demo-issuer",
-		audience: "demo-audience",
-		hash:     &argonHasher{},
+		hash: &argonHasher{},
 	}
 
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &provider.Provider{
+	return &strategy.Provider{
 		Type: "password",
-		Init: func(r chi.Router) {
+		Init: func(r chi.Router, session sessions.Session) {
 			r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 				action := r.URL.Query().Get("action")
 				var body loginRequest
@@ -163,29 +152,13 @@ func New(opts ...Option) *provider.Provider {
 							Send()
 						return
 					}
-
-					//create session, either JWT or Cookie and send to user
-					jwtToken, err := cfg.jwt.Sign(*jwt.JWTClaims(
-						jwt.SetIssuer(cfg.issuer),
-						jwt.SetAudience(cfg.audience),
-						jwt.SetSubject(user.ID.String()),
-						jwt.SetExpiration(time.Now().Add(time.Hour*24*30)),
-					))
-					if err != nil {
-						utilities.JSON(w).
-							SetStatus(utilities.ResponseFail).
-							SetStatusCode(http.StatusBadRequest).
-							SetMessage(err.Error()).
-							Send()
-						return
-					}
+					_ = session.Generate(w, user.ID.String(), user.Email, user.Role)
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseSuccess).
 						SetStatusCode(http.StatusOK).
 						SetMessage("successfull login attempt").
 						SetData(map[string]interface{}{
-							"user":  user,
-							"token": string(jwtToken),
+							"user": user,
 						}).
 						Send()
 				}

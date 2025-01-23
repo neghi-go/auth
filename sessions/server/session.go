@@ -1,36 +1,35 @@
-package sessions
+package server
 
-import (
-	"time"
+import "sync"
 
-	"github.com/neghi-go/iam/sessions/server/cookies"
-)
-
-type Options func(*SessionManagement)
-
-type SessionManagement struct {
-	key             string
-	keyGenFunc      func() string
-	idleTimeout     time.Duration
-	absoluteTimeout time.Duration
-	cookie          cookies.Cookie
+type Data struct {
+	mu   *sync.RWMutex
+	data map[string]interface{}
 }
 
-func New(opts ...Options) *SessionManagement {
-	cfg := &SessionManagement{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-	return cfg
+func (d *Data) Get(key string) interface{} {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.data[key]
 }
 
-type SessionModel struct {
-	ID       string `json:"id" db:"id"`
-	Metadata Data   `json:"metadata" db:"metadata"`
+func (d *Data) Set(key string, value interface{}) {
+	d.mu.Lock()
+	d.data[key] = value
+	d.mu.Unlock()
+}
+
+func (d *Data) Del(key string) {
+	d.mu.RLock()
+	delete(d.data, key)
+	d.mu.RUnlock()
+}
+
+func (d *Data) Reset(key string) {
+	d.data = make(map[string]interface{})
 }
 
 type Session struct {
-	id     string
-	data   *metadata
-	config *SessionManagement
+	id   string
+	data *Data
 }

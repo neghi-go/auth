@@ -2,14 +2,16 @@ package authentication
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/authentication/strategy"
+	"github.com/neghi-go/iam/sessions"
 )
 
 type Options func(*Auth)
 
 type Auth struct {
-	providers []*provider.Provider
+	providers []*strategy.Provider
 	router    chi.Router
+	session   sessions.Session
 }
 
 func New(r chi.Router, opts ...Options) *Auth {
@@ -22,7 +24,7 @@ func New(r chi.Router, opts ...Options) *Auth {
 	return cfg
 }
 
-func RegisterProvider(provider *provider.Provider) Options {
+func RegisterProvider(provider *strategy.Provider) Options {
 	return func(a *Auth) {
 		a.providers = append(a.providers, provider)
 	}
@@ -30,7 +32,7 @@ func RegisterProvider(provider *provider.Provider) Options {
 
 func (a *Auth) Build() error {
 	for _, p := range a.providers {
-		p.Init(a.router)
+		p.Init(a.router, a.session)
 	}
 	return nil
 }

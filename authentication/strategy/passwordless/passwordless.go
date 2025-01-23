@@ -8,9 +8,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/iam"
-	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/authentication/strategy"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/sessions/jwt"
+	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/utilities"
 )
 
@@ -28,18 +28,9 @@ type authenticateRequest struct {
 type Option func(*passwordlessProviderConfig)
 
 type passwordlessProviderConfig struct {
-	issuer   string
-	audience string
-	store    database.Model[models.User]
-	notify   func(email string, token string) error
-	encrypt  *iam.Encrypt
-	jwt      *jwt.JWT
-}
-
-func WithJWT(jwt *jwt.JWT) Option {
-	return func(ppc *passwordlessProviderConfig) {
-		ppc.jwt = jwt
-	}
+	store   database.Model[models.User]
+	notify  func(email string, token string) error
+	encrypt *iam.Encrypt
 }
 
 func WithStore(model database.Model[models.User]) Option {
@@ -54,24 +45,22 @@ func WithNotifier(notifier func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *provider.Provider {
+func New(opts ...Option) *strategy.Provider {
 	cfg := &passwordlessProviderConfig{
-		issuer:   "default-issuer",
-		audience: "default-audience",
-		encrypt:  &iam.Encrypt{},
+		encrypt: &iam.Encrypt{},
 	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &provider.Provider{
+	return &strategy.Provider{
 		Type: "magic-link",
-		Init: func(r chi.Router) {
-			r.Post("/authorize", authorize(cfg))
+		Init: func(r chi.Router, session sessions.Session) {
+			r.Post("/authorize", authorize(cfg, session))
 		},
 	}
 }
 
-func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
+func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body authenticateRequest
 		res := utilities.JSON(w)
@@ -127,12 +116,7 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 			}
 			// create session for user
 			//create session, either JWT or Cookie and send to user
-			jwtToken, err := cfg.jwt.Sign(*jwt.JWTClaims(
-				jwt.SetIssuer(cfg.issuer),
-				jwt.SetAudience(cfg.audience),
-				jwt.SetSubject(user.ID.String()),
-				jwt.SetExpiration(time.Now().Add(time.Hour*24*30)),
-			))
+			err = session.Generate(w, user.ID.String(), user.Email)
 			if err != nil {
 				utilities.JSON(w).
 					SetStatus(utilities.ResponseFail).
@@ -154,10 +138,7 @@ func authorize(cfg *passwordlessProviderConfig) http.HandlerFunc {
 			}
 			res.SetStatus(utilities.ResponseSuccess).
 				SetStatusCode(http.StatusOK).
-				SetData(map[string]interface{}{
-					"user":  user,
-					"token": string(jwtToken),
-				}).
+				SetData(user).
 				Send()
 		case resend:
 			if _, err := cfg.store.WithContext(r.Context()).

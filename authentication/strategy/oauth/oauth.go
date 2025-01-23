@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/authentication/strategy"
+	"github.com/neghi-go/iam/sessions"
 )
 
 type Options func(*OauthProviderConfig)
@@ -21,10 +22,10 @@ type OauthProviderConfig struct {
 	scopes       []string
 }
 
-func New(cfg *OauthProviderConfig) *provider.Provider {
-	return &provider.Provider{
+func New(cfg *OauthProviderConfig) *strategy.Provider {
+	return &strategy.Provider{
 		Type: cfg.provider + "-" + "oauth",
-		Init: func(r chi.Router) {
+		Init: func(r chi.Router, session sessions.Session) {
 			r.Get("/"+cfg.provider+"/authorize", authorize())
 			r.Get("/"+cfg.provider+"/callback", callback())
 		},
