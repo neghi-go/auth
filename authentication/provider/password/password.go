@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth/jwt"
-	"github.com/neghi-go/auth/models"
-	"github.com/neghi-go/auth/provider"
 	"github.com/neghi-go/database"
+	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
 )

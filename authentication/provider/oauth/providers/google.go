@@ -1,8 +1,8 @@
 package providers
 
 import (
-	"github.com/neghi-go/auth/provider"
-	"github.com/neghi-go/auth/provider/oauth"
+	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/authentication/provider/oauth"
 )
 
 func GoogleProvider(opts ...oauth.Options) *provider.Provider {

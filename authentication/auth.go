@@ -1,8 +1,8 @@
-package auth
+package authentication
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth/provider"
+	"github.com/neghi-go/iam/authentication/provider"
 )
 
 type Options func(*Auth)

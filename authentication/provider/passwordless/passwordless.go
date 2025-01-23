@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth"
-	"github.com/neghi-go/auth/jwt"
-	"github.com/neghi-go/auth/models"
-	"github.com/neghi-go/auth/provider"
 	"github.com/neghi-go/database"
+	"github.com/neghi-go/iam"
+	"github.com/neghi-go/iam/authentication/provider"
+	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/neghi-go/utilities"
 )
 
@@ -32,7 +32,7 @@ type passwordlessProviderConfig struct {
 	audience string
 	store    database.Model[models.User]
 	notify   func(email string, token string) error
-	encrypt  *auth.Encrypt
+	encrypt  *iam.Encrypt
 	jwt      *jwt.JWT
 }
 
@@ -58,7 +58,7 @@ func New(opts ...Option) *provider.Provider {
 	cfg := &passwordlessProviderConfig{
 		issuer:   "default-issuer",
 		audience: "default-audience",
-		encrypt:  &auth.Encrypt{},
+		encrypt:  &iam.Encrypt{},
 	}
 	for _, opt := range opts {
 		opt(cfg)

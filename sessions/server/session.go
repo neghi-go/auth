@@ -3,7 +3,7 @@ package sessions
 import (
 	"time"
 
-	"github.com/neghi-go/auth/sessions/cookies"
+	"github.com/neghi-go/iam/sessions/server/cookies"
 )
 
 type Options func(*SessionManagement)

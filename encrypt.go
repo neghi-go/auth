@@ -1,4 +1,4 @@
-package auth
+package iam
 
 import (
 	"encoding/base64"

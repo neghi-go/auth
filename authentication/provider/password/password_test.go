@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/auth/jwt"
-	"github.com/neghi-go/auth/models"
 	"github.com/neghi-go/database/mongodb"
+	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 )
