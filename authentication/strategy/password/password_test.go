@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
 	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 )
@@ -55,6 +56,13 @@ func TestPassword(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	j, err := jwt.New(
+		jwt.WithPrivateKey(privKey),
+		jwt.WithPublicKey(pubKey),
+	)
+	if err != nil {
+		t.Error(err)
+	}
 	passwordProvider := New(
 		WithStore(userModel),
 		WithNotifier(func(email, token string) error {
@@ -63,7 +71,7 @@ func TestPassword(t *testing.T) {
 		}),
 	)
 
-	passwordProvider.Init(router, nil)
+	passwordProvider.Init(router, j)
 
 	t.Run("Test Registration Flow", func(t *testing.T) {
 		t.Run("Register User", func(t *testing.T) {

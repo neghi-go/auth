@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/iam/sessions/store"
 )
 
@@ -46,7 +47,10 @@ type JWT struct {
 
 func New(opts ...Options) (*JWT, error) {
 	cfg := &JWT{
-		algo: RS256,
+		algo:       RS256,
+		issuer:     "default-issuer",
+		audience:   "default-audience",
+		expireTime: 3 * 60,
 	}
 
 	for _, opt := range opts {
@@ -124,3 +128,20 @@ func (j *JWT) Verify(tok string) (jwt.Token, error) {
 }
 
 func (j *JWT) Validate(key string) error { return nil }
+
+// DelField implements sessions.Session.
+func (j *JWT) DelField(key string) error {
+	panic("unimplemented")
+}
+
+// GetField implements sessions.Session.
+func (j *JWT) GetField(key string) interface{} {
+	panic("unimplemented")
+}
+
+// SetField implements sessions.Session.
+func (j *JWT) SetField(key string, value interface{}) error {
+	panic("unimplemented")
+}
+
+var _ sessions.Session = (*JWT)(nil)

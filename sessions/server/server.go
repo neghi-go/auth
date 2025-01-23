@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/neghi-go/iam"
+	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/utils"
 )
 
 type Server struct {
@@ -28,6 +29,21 @@ type Server struct {
 	session *Session
 }
 
+// DelField implements sessions.Session.
+func (s *Server) DelField(key string) error {
+	panic("unimplemented")
+}
+
+// GetField implements sessions.Session.
+func (s *Server) GetField(key string) interface{} {
+	panic("unimplemented")
+}
+
+// SetField implements sessions.Session.
+func (s *Server) SetField(key string, value interface{}) error {
+	panic("unimplemented")
+}
+
 func NewServerSession() *Server {
 	return &Server{}
 }
@@ -41,7 +57,7 @@ func (s *Server) Generate(w http.ResponseWriter, subject string, params ...inter
 		session.data.Set(fmt.Sprint(idx), data)
 	}
 	//Persist session to Store
-	d, err := iam.GobEncode(session.data.data)
+	d, err := utils.GobEncode(session.data.data)
 	if err != nil {
 		return err
 	}
@@ -74,7 +90,7 @@ func (s *Server) Validate(key string) error {
 	if err != nil {
 		return err
 	}
-	err = iam.GobDecode(d, &data)
+	err = utils.GobDecode(d, &data)
 	if err != nil {
 		return err
 	}
@@ -87,6 +103,8 @@ func (s *Server) Validate(key string) error {
 	}
 	return nil
 }
+
+var _ sessions.Session = (*Server)(nil)
 
 func (s *Server) generateSession() *Session {
 	scs := &Session{

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
 	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 )
@@ -54,10 +55,14 @@ func TestPasswordless(t *testing.T) {
 		t.Error(err)
 	}
 
+	j, err := jwt.New(jwt.WithPrivateKey(privKey), jwt.WithPublicKey(pubKey))
+	if err != nil {
+		t.Error(err)
+	}
 	New(WithStore(userModel), WithNotifier(func(email, token string) error {
 		auth_token = token
 		return nil
-	})).Init(router, nil)
+	})).Init(router, j)
 
 	t.Run("Test Authentication Flow", func(t *testing.T) {
 

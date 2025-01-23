@@ -4,6 +4,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/iam/authentication/strategy"
 	"github.com/neghi-go/iam/sessions"
+	"github.com/neghi-go/iam/sessions/server"
 )
 
 type Options func(*Auth)
@@ -16,7 +17,8 @@ type Auth struct {
 
 func New(r chi.Router, opts ...Options) *Auth {
 	cfg := &Auth{
-		router: r,
+		router:  r,
+		session: server.NewServerSession(),
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -24,9 +26,15 @@ func New(r chi.Router, opts ...Options) *Auth {
 	return cfg
 }
 
-func RegisterProvider(provider *strategy.Provider) Options {
+func RegisterStrategy(provider *strategy.Provider) Options {
 	return func(a *Auth) {
 		a.providers = append(a.providers, provider)
+	}
+}
+
+func RegisterSession(session sessions.Session) Options {
+	return func(a *Auth) {
+		a.session = session
 	}
 }
 

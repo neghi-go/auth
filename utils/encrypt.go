@@ -1,4 +1,4 @@
-package iam
+package utils
 
 import (
 	"encoding/base64"
@@ -6,10 +6,7 @@ import (
 	"github.com/neghi-go/utilities"
 )
 
-type Encrypt struct {
-}
-
-func (e *Encrypt) Encrypt(value map[string]any) (string, error) {
+func Encrypt(value map[string]any) (string, error) {
 	value["_pad"] = utilities.Generate(16)
 	b, err := GobEncode(value)
 	if err != nil {
@@ -19,7 +16,7 @@ func (e *Encrypt) Encrypt(value map[string]any) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func (e *Encrypt) Decrypt(value string) (map[string]any, error) {
+func Decrypt(value string) (map[string]any, error) {
 	res := make(map[string]any)
 	b, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {

@@ -20,7 +20,7 @@ func New(r chi.Router, opts ...Options) (*IAM, error) {
 		return nil, err
 	}
 	cfg := &IAM{
-		auth: authentication.New(r, authentication.RegisterProvider(password.New())),
+		auth: authentication.New(r, authentication.RegisterStrategy(password.New())),
 		acl:  cas,
 	}
 	return cfg, nil

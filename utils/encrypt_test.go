@@ -1,4 +1,4 @@
-package iam
+package utils
 
 import (
 	"testing"
@@ -14,17 +14,15 @@ func TestEncrypt_Encrypt(t *testing.T) {
 		"email":  "jon@doe.com",
 		"expiry": 1257898600,
 	}
-	e := &Encrypt{}
 
-	res, err = e.Encrypt(val)
+	res, err = Encrypt(val)
 	require.NoError(t, err)
 	require.NotZero(t, res)
 }
 
 func TestEncrypt_Decrypt(t *testing.T) {
-	e := &Encrypt{}
 
-	data, err := e.Decrypt(res)
+	data, err := Decrypt(res)
 	require.NoError(t, err)
 	require.NotZero(t, data)
 }

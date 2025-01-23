@@ -7,10 +7,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam"
 	"github.com/neghi-go/iam/authentication/strategy"
 	"github.com/neghi-go/iam/models"
 	"github.com/neghi-go/iam/sessions"
+	"github.com/neghi-go/iam/utils"
 	"github.com/neghi-go/utilities"
 )
 
@@ -28,9 +28,8 @@ type authenticateRequest struct {
 type Option func(*passwordlessProviderConfig)
 
 type passwordlessProviderConfig struct {
-	store   database.Model[models.User]
-	notify  func(email string, token string) error
-	encrypt *iam.Encrypt
+	store  database.Model[models.User]
+	notify func(email string, token string) error
 }
 
 func WithStore(model database.Model[models.User]) Option {
@@ -46,9 +45,7 @@ func WithNotifier(notifier func(email, token string) error) Option {
 }
 
 func New(opts ...Option) *strategy.Provider {
-	cfg := &passwordlessProviderConfig{
-		encrypt: &iam.Encrypt{},
-	}
+	cfg := &passwordlessProviderConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -84,7 +81,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 			}
 			//when url contains token
 			//parse token
-			tokenValues, _ := cfg.encrypt.Decrypt(token)
+			tokenValues, _ := utils.Decrypt(token)
 			//validate parsed token
 			if tokenValues["email"] != body.Email {
 				res.SetStatus(utilities.ResponseError).
@@ -153,7 +150,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 				"email":  body.Email,
 				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
 			}
-			token, _ := cfg.encrypt.Encrypt(tokenValues)
+			token, _ := utils.Encrypt(tokenValues)
 			// send to user
 			_ = cfg.notify(body.Email, token)
 			res.SetStatus(utilities.ResponseSuccess).
@@ -180,7 +177,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 				"email":  body.Email,
 				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
 			}
-			token, _ := cfg.encrypt.Encrypt(tokenValues)
+			token, _ := utils.Encrypt(tokenValues)
 			_ = cfg.notify(body.Email, token)
 
 			res.SetStatus(utilities.ResponseSuccess).
