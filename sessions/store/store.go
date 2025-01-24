@@ -1,9 +1,12 @@
 package store
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Store interface {
-	Get(key string) ([]byte, error)
-	Set(key string, value []byte, ttl time.Duration) error
-	Del(key string) error
+	Get(ctx context.Context, key string) ([]byte, error)
+	Set(ctx context.Context, key string, value []byte, ttl time.Duration) error
+	Del(ctx context.Context, key string) error
 }
