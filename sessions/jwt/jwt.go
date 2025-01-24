@@ -40,7 +40,7 @@ type JWT struct {
 	private_key *rsa.PrivateKey
 	public_key  any
 
-	token *jwt.Token
+	token jwt.Token
 
 	store store.Store
 }
@@ -131,17 +131,20 @@ func (j *JWT) Validate(key string) error { return nil }
 
 // DelField implements sessions.Session.
 func (j *JWT) DelField(key string) error {
-	panic("unimplemented")
+	return j.token.Remove(key)
 }
 
 // GetField implements sessions.Session.
 func (j *JWT) GetField(key string) interface{} {
-	panic("unimplemented")
+	if value, ok := j.token.Get(key); ok {
+		return value
+	}
+	return nil
 }
 
 // SetField implements sessions.Session.
 func (j *JWT) SetField(key string, value interface{}) error {
-	panic("unimplemented")
+	return j.token.Set(key, value)
 }
 
 var _ sessions.Session = (*JWT)(nil)
