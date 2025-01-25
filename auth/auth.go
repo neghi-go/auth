@@ -1,10 +1,10 @@
-package authentication
+package auth
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/iam/authentication/strategy"
-	"github.com/neghi-go/iam/sessions"
-	"github.com/neghi-go/iam/sessions/server"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/sessions/server"
+	"github.com/neghi-go/iam/auth/strategy"
 )
 
 type Options func(*Auth)
@@ -26,9 +26,9 @@ func New(r chi.Router, opts ...Options) *Auth {
 	return cfg
 }
 
-func RegisterStrategy(provider *strategy.Provider) Options {
+func RegisterStrategy(provider ...*strategy.Provider) Options {
 	return func(a *Auth) {
-		a.providers = append(a.providers, provider)
+		a.providers = provider
 	}
 }
 

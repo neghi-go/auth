@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions/store"
 	"github.com/redis/go-redis/v9"
 )
 

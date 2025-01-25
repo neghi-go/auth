@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions/store"
 )
 
 type items struct {

@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
+	"github.com/neghi-go/iam/auth/sessions/jwt"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/sessions/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 )
@@ -63,7 +63,7 @@ func TestPassword(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	passwordProvider := New(
+	passwordProvider := NewPasswordStrategy(
 		WithStore(userModel),
 		WithNotifier(func(email, token string) error {
 			auth_token = token
@@ -76,7 +76,7 @@ func TestPassword(t *testing.T) {
 	t.Run("Test Registration Flow", func(t *testing.T) {
 		t.Run("Register User", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := registerRequest{
+			user := passwordRequest{
 				Email:    "jon@doe.com",
 				Password: "password123.",
 			}
@@ -95,7 +95,7 @@ func TestPassword(t *testing.T) {
 
 		t.Run("Verify User Email", func(t *testing.T) {
 			var buf bytes.Buffer
-			verifyEmail := verifyEmailRequest{
+			verifyEmail := passwordRequest{
 				Email: "jon@doe.com",
 				Token: auth_token,
 			}
@@ -114,7 +114,7 @@ func TestPassword(t *testing.T) {
 
 		t.Run("User Login", func(t *testing.T) {
 			var buf bytes.Buffer
-			loginUser := loginRequest{
+			loginUser := passwordRequest{
 				Email:    "jon@doe.com",
 				Password: "password123.",
 			}
@@ -135,7 +135,7 @@ func TestPassword(t *testing.T) {
 	t.Run("Test Password-Reset Flow", func(t *testing.T) {
 		t.Run("Request Reset Password", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := resetPasswordRequest{
+			user := passwordRequest{
 				Email: "jon@doe.com",
 			}
 			err := json.NewEncoder(&buf).Encode(user)
@@ -153,10 +153,10 @@ func TestPassword(t *testing.T) {
 
 		t.Run("Change Password", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := resetPasswordRequest{
-				Email:       "jon@doe.com",
-				Token:       auth_token,
-				NewPassword: "Pass1234.",
+			user := passwordRequest{
+				Email:    "jon@doe.com",
+				Token:    auth_token,
+				Password: "Pass1234.",
 			}
 			err := json.NewEncoder(&buf).Encode(user)
 			if err != nil {
@@ -170,7 +170,7 @@ func TestPassword(t *testing.T) {
 		})
 		t.Run("User Login", func(t *testing.T) {
 			var buf bytes.Buffer
-			loginUser := loginRequest{
+			loginUser := passwordRequest{
 				Email:    "jon@doe.com",
 				Password: "Pass1234.",
 			}

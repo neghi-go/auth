@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"

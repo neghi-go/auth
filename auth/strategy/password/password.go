@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam/authentication/strategy"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/strategy"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
 )
@@ -25,49 +25,8 @@ const (
 	reset  Action = "reset"
 )
 
-type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type resetPasswordRequest struct {
-	Email       string `json:"email"`
-	Token       string `json:"token"`
-	NewPassword string `json:"password"`
-}
-
-type verifyEmailRequest struct {
-	Email string `json:"email"`
-	Token string `json:"token"`
-}
-
-type Option func(*passwordProviderConfig)
-
-type passwordProviderConfig struct {
-	hash   Hasher
-	store  database.Model[models.User]
-	notify func(email, token string) error
-}
-
-func WithStore(userModel database.Model[models.User]) Option {
-	return func(ppc *passwordProviderConfig) {
-		ppc.store = userModel
-	}
-}
-
-func WithNotifier(notify func(email, token string) error) Option {
-	return func(ppc *passwordProviderConfig) {
-		ppc.notify = notify
-	}
-}
-
-func New(opts ...Option) *strategy.Provider {
-	cfg := &passwordProviderConfig{
+func NewPasswordStrategy(opts ...Option) *strategy.Provider {
+	cfg := &passwordStrategy{
 		hash: &argonHasher{},
 	}
 
@@ -79,7 +38,7 @@ func New(opts ...Option) *strategy.Provider {
 		Init: func(r chi.Router, session sessions.Session) {
 			r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 				action := r.URL.Query().Get("action")
-				var body loginRequest
+				var body passwordRequest
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
@@ -165,7 +124,7 @@ func New(opts ...Option) *strategy.Provider {
 
 			})
 			r.Post("/register", func(w http.ResponseWriter, r *http.Request) {
-				var body registerRequest
+				var body passwordRequest
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
@@ -224,7 +183,7 @@ func New(opts ...Option) *strategy.Provider {
 			})
 			r.Post("/password-reset", func(w http.ResponseWriter, r *http.Request) {
 				action := r.URL.Query().Get("action")
-				var body resetPasswordRequest
+				var body passwordRequest
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).
@@ -320,7 +279,7 @@ func New(opts ...Option) *strategy.Provider {
 
 					user.PasswordResetToken = ""
 					user.PasswordSalt = utilities.Generate(16)
-					user.Password = cfg.hash.hash(body.NewPassword, user.PasswordSalt)
+					user.Password = cfg.hash.hash(body.Password, user.PasswordSalt)
 					user.PasswordUpdatedOn = time.Now().UTC()
 					user.PasswordResetAttempt = 0
 					user.PasswordResetTokenCreatedAt = time.Time{}
@@ -344,7 +303,7 @@ func New(opts ...Option) *strategy.Provider {
 			})
 			r.Post("/email-verify", func(w http.ResponseWriter, r *http.Request) {
 				action := r.URL.Query().Get("action")
-				var body verifyEmailRequest
+				var body passwordRequest
 				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 					utilities.JSON(w).
 						SetStatus(utilities.ResponseError).

@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/neghi-go/iam/sessions"
-	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions/store/memory"
 	"github.com/neghi-go/iam/utils"
+	"github.com/neghi-go/utilities"
 )
 
 type Server struct {
@@ -46,8 +48,23 @@ func (s *Server) SetField(key string, value interface{}) error {
 	panic("unimplemented")
 }
 
-func NewServerSession() *Server {
-	return &Server{}
+func NewServerSession(opts ...Options) *Server {
+	cfg := &Server{
+		store: memory.New(),
+		keyGenFunc: func() string {
+			return utilities.Generate(16)
+		},
+		identifier:      "sessions-key",
+		sameSite:        http.SameSiteLaxMode,
+		secure:          false,
+		httpOnly:        true,
+		idleTimeout:     0,
+		absoluteTimeout: time.Hour,
+	}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return cfg
 }
 
 // Generate implements sessions.Session.

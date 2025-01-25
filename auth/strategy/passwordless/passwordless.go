@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam/authentication/strategy"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/strategy"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/sessions"
 	"github.com/neghi-go/iam/utils"
 	"github.com/neghi-go/utilities"
 )

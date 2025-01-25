@@ -11,8 +11,8 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/neghi-go/iam/sessions"
-	"github.com/neghi-go/iam/sessions/store"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/sessions/store"
 )
 
 type Algo string

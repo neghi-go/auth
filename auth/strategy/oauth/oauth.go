@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/iam/authentication/strategy"
-	"github.com/neghi-go/iam/sessions"
+	"github.com/neghi-go/iam/auth/sessions"
+	"github.com/neghi-go/iam/auth/strategy"
 )
 
 type Options func(*OauthProviderConfig)
