@@ -1,4 +1,4 @@
-package email
+package passwordless
 
 import (
 	"encoding/json"
@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/neghi-go/database"
+	"github.com/neghi-go/iam/auth/models"
 	"github.com/neghi-go/iam/auth/providers"
-	"github.com/neghi-go/iam/models"
 	"github.com/neghi-go/utilities"
 )
 
@@ -112,6 +112,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 					user.LastLogin = time.Now().UTC().Unix()
 					if !user.EmailVerified {
 						user.EmailVerified = true
+						user.EmailVerifiedAt = time.Now().UTC()
 					}
 					// create session for user
 					//create session, either JWT or Cookie and send to user
@@ -128,7 +129,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 						return
 
 					}
-					cfg.success(w, http.StatusOK, nil)
+					cfg.success(w, http.StatusOK, user)
 				case resend:
 					if _, err := cfg.store.WithContext(r.Context()).
 						Query(database.WithFilter("email", body.Email)).First(); err != nil {

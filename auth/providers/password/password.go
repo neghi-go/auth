@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/neghi-go/database"
+	"github.com/neghi-go/iam/auth/models"
 	"github.com/neghi-go/iam/auth/providers"
-	"github.com/neghi-go/iam/models"
 	"github.com/neghi-go/utilities"
 	"golang.org/x/crypto/argon2"
 )
@@ -75,7 +75,7 @@ func PasswordProvider(opts ...PasswordProviderOptions) *providers.Provider {
 				SetMessage(err.Error()).Send()
 		},
 		notify: func(email, token string) error {
-			fmt.Printf("email: %v, token: %v", email, token)
+			fmt.Printf("email: %v, token: %v\n", email, token)
 			return nil
 		},
 	}
@@ -192,6 +192,11 @@ func PasswordProvider(opts ...PasswordProviderOptions) *providers.Provider {
 					}
 
 					//check if user email is verified
+					if user.EmailVerified {
+						cfg.error(w, utilities.ResponseFail, errVerified, http.StatusBadRequest)
+						return
+					}
+
 					user.EmailVerifyToken = utilities.Generate(cfg.token_length)
 					user.EmailVerifyTokenCreatedAt = time.Now().UTC()
 					user.EmailVerifyTokenExpiresAt = time.Now().Add(time.Second * time.Duration(cfg.token_expiry.Seconds())).UTC()

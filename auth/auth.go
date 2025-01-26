@@ -7,7 +7,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/session"
-	"github.com/neghi-go/session/server"
 )
 
 type Options func(*Auth)
@@ -18,9 +17,7 @@ type Auth struct {
 }
 
 func New(opts ...Options) *Auth {
-	cfg := &Auth{
-		session: server.NewServerSession(),
-	}
+	cfg := &Auth{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -53,9 +50,11 @@ func (a *Auth) Build() (chi.Router, error) {
 			})
 		})
 		//initialize route with context
-		p.Init(router, providers.ProviderConfig{})
+		p.Init(router, providers.ProviderConfig{
+			Session: a.session,
+		})
 		//register handler to global router
-		r.Handle("/"+p.Name, router)
+		r.Mount("/"+p.Name, router)
 	}
 	return r, nil
 }

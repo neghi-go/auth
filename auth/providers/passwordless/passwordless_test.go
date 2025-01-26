@@ -1,4 +1,4 @@
-package email
+package passwordless
 
 import (
 	"bytes"
@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
+	"github.com/neghi-go/iam/auth/models"
 	"github.com/neghi-go/iam/auth/providers"
-	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/session/jwt"
+	"github.com/neghi-go/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -57,7 +57,7 @@ func TestPasswordless(t *testing.T) {
 		t.Error(err)
 	}
 
-	j, err := jwt.New(jwt.WithPrivateKey(privKey), jwt.WithPublicKey(pubKey))
+	j, err := session.NewJWTSession(session.WithPrivateKey(privKey), session.WithPublicKey(pubKey))
 	if err != nil {
 		t.Error(err)
 	}

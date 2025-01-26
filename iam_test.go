@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
-	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/session/server"
-	"github.com/neghi-go/session/store/redis"
+	"github.com/neghi-go/iam/auth/models"
+	"github.com/neghi-go/session"
+	"github.com/neghi-go/session/store"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 )
@@ -63,9 +63,9 @@ func TestIAM(t *testing.T) {
 	_, err = mongodb.RegisterModel(mgd, "users", models.User{})
 	require.NoError(t, err)
 
-	store_redis, err := redis.New(redis.WithURL("redis://" + redis_url))
+	store_redis, err := store.NewRedisStore(store.WithRedisURL("redis://" + redis_url))
 	require.NoError(t, err)
-	_ = server.NewServerSession(server.WithStore(store_redis))
+	_ = session.NewServerSession(session.WithStore(store_redis))
 	t.Run("Test Password Stratetgy", func(t *testing.T) {
 		////var buf bytes.Buffer
 		////body := map[string]interface{}{

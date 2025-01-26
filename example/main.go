@@ -1,0 +1,50 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/neghi-go/database/mongodb"
+	"github.com/neghi-go/iam/auth"
+	"github.com/neghi-go/iam/auth/models"
+	"github.com/neghi-go/iam/auth/providers/password"
+	"github.com/neghi-go/iam/auth/providers/passwordless"
+	"github.com/neghi-go/session"
+)
+
+var (
+	privKey = "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb1FJQkFBS0NBUUI4K3IvSGlmRjZzWGZvdlBtUjNxVWxHVE80TWEvcjllN2xXU3R6MFZpdE80NXI2bHlpCklUZnM5U1JpMUlBUUtTK2JPMnRWTWE1RVJqanVSa3MwSVpaMTNkNTRvRVNSWFd1ZzlwYmxRZ2lDU2VtY0RnRlgKdTNaSWRoSWs5RGJvQnJmOERlbHROdkhQRGMzNVkyMzVqVDRWNW9IaUtYbmovQ1NXakNMQUJIOUZpeWZoNjRObAp6RkxEaTk5djVjdUtCY2JmSHIzMHRGNktRdk1NckNJTFF6eFZUTkpjckxuSmRPMXdkVXhkKzRBSnloZlE3aE5lCldsaHUxVERBd3ZVd0VMc0hxaGhML3ZLYitIdUwwbnQ3b0xVZ0Y4aEFJOENVMHIzVmtjUmZCTkR6d3pvajJqWG0KZkZESHNRQnlGNmQzNFVJWnJCR0grMUNiNHZTYW1uUDdxbjc3QWdNQkFBRUNnZ0VBUzdYRytjVHB3UzdDK2YySQpua0ltL3R0T2huV3JJYUVoTUZTZFN4TDF5ak42Nm9yVnhPMmtxR28wdVo0TFdqN285UHZBNEtJdzlIRXB5Y1pSCmhtb1djSjZRUjdpbThQeUwxNzJwMllYd0M2VmszRUZydE03K0w1VS9GcDNPcVM1d3hFTlZOZkVEK1M5ZXFJWUEKT0IzRkQ1Vk05MG15NmxaemY3T3kxV21rQStjVmRDZmlic20rL0lvYyswUlNKRDk2ZzNHaFNDV0t1WllVcUJKMAp0QXVHemZLTlJJZFBySmwrVHBrc0FFbndhRDFoZkg0NEJITTRKV0Fvb1JVK2l4aGlINWQ3Z1pYbmJ4MkdOazFxCnlkY3NIZGxuRXI5dG9WMjRxQW5ZKzlxQUtCY0hlQ0c1UXlZSFRTOWJJWDdDUTFZbHVkYlBDMGEzUENzdDBhTnUKTUdnaFdRS0JnUURWKzgwUmlOTHJFQ2lXV0d6OWw3bmtHR1JPUnRXZG1KdThCTHpXUjhGdkM1NnJLVGxEZ3M3UwpOME9ybmZPUHNJYkxPaXpIZmdjZVJQcnVKRWE0azd4L3B6OGxOOWpSVXpWeE9EUWwwekt3VkxycFFCdkdHV3FJCk5RMld0ZVNHY1lTejl2TlBYVEpBVFpMclE5a2tpWVdDQzJWaEMyVk11WlVTTGJIRFE2Y1Ivd0tCZ1FDVmhRYTAKaFRUbHl4OStBbll5WDU4bGhBSUFDVmJJQkUxNVNxM3BvMkZ3ZWM2dTAxRkpCZWhvUjJCMnV3MnF0UHZEdlZMYQowblcvUE5QaUJhbW5ZbHcwK3V6Mnhla0lmMG5Dcm9wZTBiUjNNUmU2UURoQ2wvYkExUktGc1lNYWE3VGlPUENECkkxcXlwRFVGL1Zrak81UlRpZ0hYdkg3amZTNU94cFVjSHY3YkJRS0JnSFZYL3kzbGJWeXdZTUdKdmtNV3lEN1kKVFhGTGtPczZlL1NRV0luZGthcjJvVTFWYnV5aHVBODVkU2VRbDdjdFk4M2dtaHZQOWRGWW5JNnBZQXJxSVUyVApocUkvVE93RmlHSU5Jek8yN0s0YjJOLytZdnl3aFdZcVNjaGkrTzN0Skl1WUdmZGtzU0RvS1hCUXBheE9xZU1WCm9zT2oveW9pL3llWDNVcXFOOTA3QW9HQWRmY0FOVWlyVldtT3JTSlFFcW95cTZ5Y3oxNk80enZSekJKSlovNEoKRUc1cHpMRFlmdDUwWUdHQUQrekFlYUJVeWpnQ3VMWTNRK3cvMXlGVW1zVVZybzhTaWhmWEpXY1gwTXRZVERyegpRTjZ3czdlYks1OHRoVElXYlBpQ1VVUU04RGF3T3lhWGxqM0x2N0FFdGJGNTh2YjlRVEpzZ2hydmdDTlkzVmp2CkJla0NnWUFrUjJiNmZ5Ym5iMnZpbThUT2RPbXVFdy9tb3N6LzMxNjgvM3Zla2dpVmRydTFGVjdlR09UZ3drT28KdmxpVmRLb21TTDJpbTJJdkpZUVNobjU1WEhmM01EUEd6M3oyWEl3NndGbytqQm43Z3pZNlhYZzVRWkxmOWpuTwo2YTBjbTg0aStQMFBzYjA2YW5WY2c1QklXa3Y3MGZpeFY1Rnpwbkx4Zk5aYlphZDZzdz09Ci0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0t"
+	pubKey  = "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklUQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FRNEFNSUlCQ1FLQ0FRQjgrci9IaWZGNnNYZm92UG1SM3FVbApHVE80TWEvcjllN2xXU3R6MFZpdE80NXI2bHlpSVRmczlTUmkxSUFRS1MrYk8ydFZNYTVFUmpqdVJrczBJWloxCjNkNTRvRVNSWFd1ZzlwYmxRZ2lDU2VtY0RnRlh1M1pJZGhJazlEYm9CcmY4RGVsdE52SFBEYzM1WTIzNWpUNFYKNW9IaUtYbmovQ1NXakNMQUJIOUZpeWZoNjRObHpGTERpOTl2NWN1S0JjYmZIcjMwdEY2S1F2TU1yQ0lMUXp4VgpUTkpjckxuSmRPMXdkVXhkKzRBSnloZlE3aE5lV2xodTFUREF3dlV3RUxzSHFoaEwvdktiK0h1TDBudDdvTFVnCkY4aEFJOENVMHIzVmtjUmZCTkR6d3pvajJqWG1mRkRIc1FCeUY2ZDM0VUlackJHSCsxQ2I0dlNhbW5QN3FuNzcKQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0t"
+)
+
+func main() {
+	mgd, err := mongodb.New("mongodb://localhost:27017", "test-db")
+	if err != nil {
+		panic(err)
+	}
+	userModel, err := mongodb.RegisterModel(mgd, "users", models.User{})
+	if err != nil {
+		panic(err)
+	}
+	j, err := session.NewJWTSession(
+		session.WithPrivateKey(privKey),
+		session.WithPublicKey(pubKey),
+	)
+	r, err := auth.New(
+		auth.RegisterStrategy(
+			password.PasswordProvider(password.WithStore(userModel)),
+			passwordless.PasswordlessProvider(passwordless.WithStore(userModel)),
+		),
+		auth.RegisterSession(j),
+	).Build()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Server up and running")
+	chi.Walk(r, func(method, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		fmt.Printf("method : %v, route: %v\n", method, route)
+		return nil
+	})
+	http.ListenAndServe(":8080", r)
+}
