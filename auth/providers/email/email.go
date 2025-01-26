@@ -1,4 +1,4 @@
-package passwordless
+package email
 
 import (
 	"encoding/json"
@@ -7,10 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam/auth/sessions"
-	"github.com/neghi-go/iam/auth/strategy"
+	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/iam/utils"
+	"github.com/neghi-go/session"
 	"github.com/neghi-go/utilities"
 )
 
@@ -44,20 +43,20 @@ func WithNotifier(notifier func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *strategy.Provider {
+func New(opts ...Option) *providers.Provider {
 	cfg := &passwordlessProviderConfig{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	return &strategy.Provider{
+	return &providers.Provider{
 		Type: "magic-link",
-		Init: func(r chi.Router, session sessions.Session) {
-			r.Post("/authorize", authorize(cfg, session))
+		Init: func(r chi.Router, ctx providers.ProviderConfig) {
+			r.Post("/authorize", authorize(cfg, ctx))
 		},
 	}
 }
 
-func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.HandlerFunc {
+func authorize(cfg *passwordlessProviderConfig, ctx providers.ProviderConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body authenticateRequest
 		res := utilities.JSON(w)
@@ -81,7 +80,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 			}
 			//when url contains token
 			//parse token
-			tokenValues, _ := utils.Decrypt(token)
+			tokenValues, _ := utilities.Decrypt(token)
 			//validate parsed token
 			if tokenValues["email"] != body.Email {
 				res.SetStatus(utilities.ResponseError).
@@ -150,7 +149,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 				"email":  body.Email,
 				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
 			}
-			token, _ := utils.Encrypt(tokenValues)
+			token, _ := utilities.Encrypt(tokenValues)
 			// send to user
 			_ = cfg.notify(body.Email, token)
 			res.SetStatus(utilities.ResponseSuccess).
@@ -177,7 +176,7 @@ func authorize(cfg *passwordlessProviderConfig, session sessions.Session) http.H
 				"email":  body.Email,
 				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
 			}
-			token, _ := utils.Encrypt(tokenValues)
+			token, _ := utilities.Encrypt(tokenValues)
 			_ = cfg.notify(body.Email, token)
 
 			res.SetStatus(utilities.ResponseSuccess).

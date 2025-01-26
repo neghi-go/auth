@@ -1,6 +1,7 @@
 package iam
 
 import (
+	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/iam/auth"
 )
 
@@ -10,7 +11,7 @@ type IAM struct {
 	auth *auth.Auth
 }
 
-func New(opts ...Options) error {
+func New(opts ...Options) (chi.Router, error) {
 	cfg := &IAM{}
 	for _, opt := range opts {
 		opt(cfg)

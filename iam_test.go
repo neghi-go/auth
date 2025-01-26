@@ -2,17 +2,14 @@ package iam
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
-	"github.com/neghi-go/iam/auth"
-	"github.com/neghi-go/iam/auth/sessions/server"
-	"github.com/neghi-go/iam/auth/sessions/store/redis"
-	"github.com/neghi-go/iam/auth/strategy/password"
 	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/session/server"
+	"github.com/neghi-go/session/store/redis"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 )
@@ -58,38 +55,31 @@ func TestMain(m *testing.M) {
 }
 
 func TestIAM(t *testing.T) {
-	r := chi.NewRouter()
+	_ = chi.NewRouter()
 
 	mgd, err := mongodb.New("mongodb://"+mongo_url, "test-db")
 	require.NoError(t, err)
 
-	userModel, err := mongodb.RegisterModel(mgd, "users", models.User{})
+	_, err = mongodb.RegisterModel(mgd, "users", models.User{})
 	require.NoError(t, err)
 
 	store_redis, err := redis.New(redis.WithURL("redis://" + redis_url))
 	require.NoError(t, err)
-	s := server.NewServerSession(server.WithStore(store_redis))
-	err = New(WithAuth(
-		auth.New(r, auth.RegisterStrategy(
-			password.NewPasswordStrategy(password.WithNotifier(func(email, token string) error {
-				fmt.Println(email)
-				return nil
-			}), password.WithStore(userModel))), auth.RegisterSession(s))))
-	require.NoError(t, err)
+	_ = server.NewServerSession(server.WithStore(store_redis))
 	t.Run("Test Password Stratetgy", func(t *testing.T) {
-	////var buf bytes.Buffer
-	////body := map[string]interface{}{
-	////	"email":    "jon@doe.com",
-	////	"password": "pass1234.",
-	////}
+		////var buf bytes.Buffer
+		////body := map[string]interface{}{
+		////	"email":    "jon@doe.com",
+		////	"password": "pass1234.",
+		////}
 
-	////err := json.NewEncoder(&buf).Encode(body)
-	////require.NoError(t, err)
+		////err := json.NewEncoder(&buf).Encode(body)
+		////require.NoError(t, err)
 
-	////req := httptest.NewRequest(http.MethodPost, "/login", &buf)
-	////res := httptest.NewRecorder()
+		////req := httptest.NewRequest(http.MethodPost, "/login", &buf)
+		////res := httptest.NewRecorder()
 
-	////r.ServeHTTP(res, req)
-	////assert.Equal(t, res.Code, http.StatusOK)
+		////r.ServeHTTP(res, req)
+		////assert.Equal(t, res.Code, http.StatusOK)
 	})
 }

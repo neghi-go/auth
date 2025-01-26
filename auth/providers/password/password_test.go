@@ -11,9 +11,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
-	"github.com/neghi-go/iam/auth/sessions/jwt"
+	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/iam/models"
+	"github.com/neghi-go/session/jwt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -49,63 +51,70 @@ func TestPassword(t *testing.T) {
 	var auth_token string
 	router := chi.NewRouter()
 	mongo, err := mongodb.New("mongodb://"+test_url, "test-db")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	userModel, err := mongodb.RegisterModel(mongo, "users", models.User{})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
+
 	j, err := jwt.New(
 		jwt.WithPrivateKey(privKey),
 		jwt.WithPublicKey(pubKey),
 	)
-	if err != nil {
-		t.Error(err)
-	}
-	passwordProvider := NewPasswordStrategy(
-		WithStore(userModel),
-		WithNotifier(func(email, token string) error {
-			auth_token = token
-			return nil
-		}),
-	)
+	require.NoError(t, err)
 
-	passwordProvider.Init(router, j)
+	PasswordProvider(WithStore(userModel), WithNotifier(func(email, token string) error {
+		auth_token = token
+		return nil
+	})).Init(router, providers.ProviderConfig{
+		Session: j,
+	})
 
-	t.Run("Test Registration Flow", func(t *testing.T) {
+	t.Run("Test On Boarding Flow", func(t *testing.T) {
 		t.Run("Register User", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := passwordRequest{
-				Email:    "jon@doe.com",
-				Password: "password123.",
+			user := map[string]string{
+				"email":                 "jon@doe.com",
+				"password":              "password123.",
+				"password_confirmation": "password123.",
 			}
 
 			err := json.NewEncoder(&buf).Encode(user)
-			if err != nil {
-				t.Error(err)
-			}
+			require.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodPost, "/register", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
-			assert.Equal(t, http.StatusOK, res.Code)
+			assert.Equal(t, http.StatusCreated, res.Code)
+		})
+
+		t.Run("Login User When Not Verified", func(t *testing.T) {
+			var buf bytes.Buffer
+			user := map[string]string{
+				"email":    "jon@doe.com",
+				"password": "password123.",
+			}
+			err := json.NewEncoder(&buf).Encode(user)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
+			res := httptest.NewRecorder()
+
+			router.ServeHTTP(res, req)
+			assert.Equal(t, http.StatusBadRequest, res.Code)
+
 		})
 
 		t.Run("Verify User Email", func(t *testing.T) {
 			var buf bytes.Buffer
-			verifyEmail := passwordRequest{
-				Email: "jon@doe.com",
-				Token: auth_token,
+			body := map[string]string{
+				"email": "jon@doe.com",
+				"token": auth_token,
 			}
 
-			err := json.NewEncoder(&buf).Encode(verifyEmail)
-			if err != nil {
-				t.Error(err)
-			}
+			err := json.NewEncoder(&buf).Encode(body)
+			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/email-verify", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/register?action=verify", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
@@ -114,17 +123,14 @@ func TestPassword(t *testing.T) {
 
 		t.Run("User Login", func(t *testing.T) {
 			var buf bytes.Buffer
-			loginUser := passwordRequest{
-				Email:    "jon@doe.com",
-				Password: "password123.",
+			user := map[string]string{
+				"email":    "jon@doe.com",
+				"password": "password123.",
 			}
+			err := json.NewEncoder(&buf).Encode(user)
+			require.NoError(t, err)
 
-			err := json.NewEncoder(&buf).Encode(loginUser)
-			if err != nil {
-				t.Error(err)
-			}
-
-			req := httptest.NewRequest(http.MethodPost, "/login", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
@@ -135,52 +141,61 @@ func TestPassword(t *testing.T) {
 	t.Run("Test Password-Reset Flow", func(t *testing.T) {
 		t.Run("Request Reset Password", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := passwordRequest{
-				Email: "jon@doe.com",
+			user := map[string]string{
+				"email": "jon@doe.com",
 			}
 			err := json.NewEncoder(&buf).Encode(user)
-			if err != nil {
-				t.Error(err)
-			}
+			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/password-reset?action=reset", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/change?action=reset", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
-
 			assert.Equal(t, http.StatusOK, res.Code)
 		})
 
 		t.Run("Change Password", func(t *testing.T) {
 			var buf bytes.Buffer
-			user := passwordRequest{
-				Email:    "jon@doe.com",
-				Token:    auth_token,
-				Password: "Pass1234.",
+			user := map[string]string{
+				"email":    "jon@doe.com",
+				"token":    auth_token,
+				"password": "Pass1234.",
 			}
 			err := json.NewEncoder(&buf).Encode(user)
 			if err != nil {
 				t.Error(err)
 			}
-			req := httptest.NewRequest(http.MethodPost, "/password-reset", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/change", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
 			assert.Equal(t, http.StatusOK, res.Code)
 		})
-		t.Run("User Login", func(t *testing.T) {
+		t.Run("User Login With Previous Password", func(t *testing.T) {
 			var buf bytes.Buffer
-			loginUser := passwordRequest{
-				Email:    "jon@doe.com",
-				Password: "Pass1234.",
+			user := map[string]string{
+				"email":    "jon@doe.com",
+				"password": "password123.",
 			}
+			err := json.NewEncoder(&buf).Encode(user)
+			require.NoError(t, err)
 
-			err := json.NewEncoder(&buf).Encode(loginUser)
-			if err != nil {
-				t.Error(err)
+			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
+			res := httptest.NewRecorder()
+
+			router.ServeHTTP(res, req)
+			assert.Equal(t, http.StatusBadRequest, res.Code)
+		})
+		t.Run("User Login With New Password", func(t *testing.T) {
+			var buf bytes.Buffer
+			user := map[string]string{
+				"email":    "jon@doe.com",
+				"password": "Pass1234.",
 			}
+			err := json.NewEncoder(&buf).Encode(user)
+			require.NoError(t, err)
 
-			req := httptest.NewRequest(http.MethodPost, "/login", &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)
