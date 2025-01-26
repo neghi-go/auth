@@ -11,9 +11,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
+	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/iam/models"
 	"github.com/neghi-go/session/jwt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -59,22 +61,22 @@ func TestPasswordless(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	New(WithStore(userModel), WithNotifier(func(email, token string) error {
+	PasswordlessProvider(WithStore(userModel), WithNotifier(func(email, token string) error {
 		auth_token = token
 		return nil
-	})).Init(router, j)
+	})).Init(router, providers.ProviderConfig{
+		Session: j,
+	})
 
 	t.Run("Test Authentication Flow", func(t *testing.T) {
 
 		t.Run("Test Default Action", func(t *testing.T) {
 			var buf bytes.Buffer
-
-			body := authenticateRequest{
-				Email: "jon@doe.com",
+			body := map[string]string{
+				"email": "jon@doe.com",
 			}
-			if err := json.NewEncoder(&buf).Encode(body); err != nil {
-				t.Error(err)
-			}
+			err := json.NewEncoder(&buf).Encode(body)
+			require.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodPost, "/authorize", &buf)
 			res := httptest.NewRecorder()
@@ -85,9 +87,8 @@ func TestPasswordless(t *testing.T) {
 		})
 		t.Run("Test Resend Action", func(t *testing.T) {
 			var buf bytes.Buffer
-
-			body := authenticateRequest{
-				Email: "jon@doe.com",
+			body := map[string]string{
+				"email": "jon@doe.com",
 			}
 			if err := json.NewEncoder(&buf).Encode(body); err != nil {
 				t.Error(err)
@@ -103,15 +104,15 @@ func TestPasswordless(t *testing.T) {
 		})
 		t.Run("Test Authenticate Action", func(t *testing.T) {
 			var buf bytes.Buffer
-
-			body := authenticateRequest{
-				Email: "jon@doe.com",
+			body := map[string]string{
+				"email": "jon@doe.com",
+				"token": auth_token,
 			}
 			if err := json.NewEncoder(&buf).Encode(body); err != nil {
 				t.Error(err)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/authorize?action=authenticate&token="+auth_token, &buf)
+			req := httptest.NewRequest(http.MethodPost, "/authorize?action=authenticate", &buf)
 			res := httptest.NewRecorder()
 
 			router.ServeHTTP(res, req)

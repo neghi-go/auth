@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/iam/models"
@@ -208,6 +209,7 @@ func PasswordProvider(opts ...PasswordProviderOptions) *providers.Provider {
 				default:
 					//store validated user
 					user := models.User{
+						ID:                        uuid.New(),
 						Email:                     body.Email,
 						EmailVerifyToken:          utilities.Generate(cfg.token_length),
 						EmailVerifyTokenCreatedAt: time.Now().UTC(),

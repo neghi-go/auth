@@ -2,15 +2,24 @@ package email
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/neghi-go/database"
 	"github.com/neghi-go/iam/auth/providers"
 	"github.com/neghi-go/iam/models"
-	"github.com/neghi-go/session"
 	"github.com/neghi-go/utilities"
+)
+
+var (
+	errInvalidCredentials = errors.New("password: your email or password maybe incorrect")
+	errInvalidToken       = errors.New("password: the verification token is invalid")
+	errNotVerified        = errors.New("password: user is yet to be verified")
+	errVerified           = errors.New("password: user is verified")
 )
 
 type Action string
@@ -20,15 +29,13 @@ const (
 	resend       Action = "resend"
 )
 
-type authenticateRequest struct {
-	Email string `json:"email"`
-}
-
 type Option func(*passwordlessProviderConfig)
 
 type passwordlessProviderConfig struct {
-	store  database.Model[models.User]
-	notify func(email string, token string) error
+	store   database.Model[models.User]
+	notify  func(email string, token string) error
+	success func(w http.ResponseWriter, status_code int, data interface{})
+	error   func(w http.ResponseWriter, status utilities.ResponseStatus, err error, status_code int)
 }
 
 func WithStore(model database.Model[models.User]) Option {
@@ -43,147 +50,128 @@ func WithNotifier(notifier func(email, token string) error) Option {
 	}
 }
 
-func New(opts ...Option) *providers.Provider {
-	cfg := &passwordlessProviderConfig{}
+func PasswordlessProvider(opts ...Option) *providers.Provider {
+	cfg := &passwordlessProviderConfig{
+		success: func(w http.ResponseWriter, status_code int, data interface{}) {
+			utilities.JSON(w).SetStatus(utilities.ResponseSuccess).
+				SetStatusCode(status_code).SetData(data).Send()
+		},
+		error: func(w http.ResponseWriter, status utilities.ResponseStatus, err error, status_code int) {
+			utilities.JSON(w).SetStatus(status).SetStatusCode(status_code).
+				SetMessage(err.Error()).Send()
+		},
+		notify: func(email, token string) error {
+			fmt.Printf("email: %v, token: %v", email, token)
+			return nil
+		},
+	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 	return &providers.Provider{
-		Type: "magic-link",
+		Name: "magic-link",
 		Init: func(r chi.Router, ctx providers.ProviderConfig) {
-			r.Post("/authorize", authorize(cfg, ctx))
-		},
-	}
-}
-
-func authorize(cfg *passwordlessProviderConfig, ctx providers.ProviderConfig) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var body authenticateRequest
-		res := utilities.JSON(w)
-		action := r.URL.Query().Get("action")
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			res.SetStatus(utilities.ResponseError).
-				SetStatusCode(http.StatusInternalServerError).
-				Send()
-			return
-		}
-
-		switch Action(action) {
-		case authenticate:
-			token := r.URL.Query().Get("token")
-
-			if token == "" {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-			//when url contains token
-			//parse token
-			tokenValues, _ := utilities.Decrypt(token)
-			//validate parsed token
-			if tokenValues["email"] != body.Email {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					Send()
-				return
-			}
-			timestamp, _ := tokenValues["expiry"].(int64)
-			if time.Now().UTC().Unix() > timestamp {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage("validation token has expire, please try again").
-					Send()
-				return
-			}
-
-			user, err := cfg.store.WithContext(r.Context()).
-				Query(database.WithFilter("email", body.Email)).First()
-			if err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage("user not found").
-					Send()
-				return
-			}
-			user.LastLogin = time.Now().UTC().Unix()
-			if !user.EmailVerified {
-				user.EmailVerified = true
-			}
-			// create session for user
-			//create session, either JWT or Cookie and send to user
-			err = session.Generate(w, user.ID.String(), user.Email)
-			if err != nil {
-				utilities.JSON(w).
-					SetStatus(utilities.ResponseFail).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage(err.Error()).
-					Send()
-				return
-			}
-
-			//update user
-			if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", body.Email)).
-				Update(*user); err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage("user not updated").
-					Send()
-				return
-
-			}
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				SetData(user).
-				Send()
-		case resend:
-			if _, err := cfg.store.WithContext(r.Context()).
-				Query(database.WithFilter("email", body.Email)).First(); err != nil {
-				res.SetStatus(utilities.ResponseError).
-					SetStatusCode(http.StatusBadRequest).
-					SetMessage("user not found").
-					Send()
-				return
-			}
-			tokenValues := map[string]any{
-				"email":  body.Email,
-				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-			}
-			token, _ := utilities.Encrypt(tokenValues)
-			// send to user
-			_ = cfg.notify(body.Email, token)
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				Send()
-		default:
-			//get user if it exist and generate session
-			if _, err := cfg.store.WithContext(r.Context()).
-				Query(database.WithFilter("email", body.Email)).First(); err != nil {
-				user, err := models.NewUser().SetEmail(body.Email).Build()
-				if err != nil {
-					res.SetStatus(utilities.ResponseError).
-						SetStatusCode(http.StatusBadRequest).
-						Send()
+			r.Post("/authorize", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Email string `json:"email"`
+					Token string `json:"token"`
 				}
-				if err := cfg.store.WithContext(r.Context()).Save(*user); err != nil {
-					res.SetStatus(utilities.ResponseError).
-						SetStatusCode(http.StatusBadRequest).
-						Send()
+				action := r.URL.Query().Get("action")
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					cfg.error(w, utilities.ResponseError, err, http.StatusInternalServerError)
 					return
 				}
-			}
-			tokenValues := map[string]any{
-				"email":  body.Email,
-				"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
-			}
-			token, _ := utilities.Encrypt(tokenValues)
-			_ = cfg.notify(body.Email, token)
 
-			res.SetStatus(utilities.ResponseSuccess).
-				SetStatusCode(http.StatusOK).
-				SetMessage("please check your email for authentication link").
-				Send()
-		}
+				switch Action(action) {
+				case authenticate:
 
+					if body.Token == "" {
+						cfg.error(w, utilities.ResponseFail, errInvalidToken, http.StatusBadRequest)
+						return
+					}
+					//when url contains token
+					//parse token
+					tokenValues, _ := utilities.Decrypt(body.Token)
+					//validate parsed token
+					if tokenValues["email"] != body.Email {
+						cfg.error(w, utilities.ResponseFail, errInvalidToken, http.StatusBadRequest)
+						return
+					}
+					timestamp, _ := tokenValues["expiry"].(int64)
+					if time.Now().UTC().Unix() > timestamp {
+						cfg.error(w, utilities.ResponseFail, errInvalidToken, http.StatusBadRequest)
+						return
+					}
+
+					user, err := cfg.store.WithContext(r.Context()).
+						Query(database.WithFilter("email", body.Email)).First()
+					if err != nil {
+						cfg.error(w, utilities.ResponseFail, errInvalidCredentials, http.StatusBadRequest)
+						return
+					}
+					user.LastLogin = time.Now().UTC().Unix()
+					if !user.EmailVerified {
+						user.EmailVerified = true
+					}
+					// create session for user
+					//create session, either JWT or Cookie and send to user
+					err = ctx.Session.Generate(w, user.ID.String(), user.Email)
+					if err != nil {
+						cfg.error(w, utilities.ResponseFail, err, http.StatusBadRequest)
+						return
+					}
+
+					//update user
+					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", body.Email)).
+						Update(*user); err != nil {
+						cfg.error(w, utilities.ResponseFail, err, http.StatusBadRequest)
+						return
+
+					}
+					cfg.success(w, http.StatusOK, nil)
+				case resend:
+					if _, err := cfg.store.WithContext(r.Context()).
+						Query(database.WithFilter("email", body.Email)).First(); err != nil {
+						cfg.error(w, utilities.ResponseFail, errInvalidCredentials, http.StatusBadRequest)
+						return
+					}
+					tokenValues := map[string]any{
+						"email":  body.Email,
+						"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+					}
+					token, _ := utilities.Encrypt(tokenValues)
+					// send to user
+					if err := cfg.notify(body.Email, token); err != nil {
+						cfg.error(w, utilities.ResponseError, err, http.StatusInternalServerError)
+						return
+					}
+				default:
+					//get user if it exist and generate session
+					if _, err := cfg.store.WithContext(r.Context()).
+						Query(database.WithFilter("email", body.Email)).First(); err != nil {
+						user := models.User{
+							ID:    uuid.New(),
+							Email: body.Email,
+						}
+						if err := cfg.store.WithContext(r.Context()).Save(user); err != nil {
+							cfg.error(w, utilities.ResponseError, err, http.StatusBadRequest)
+							return
+						}
+					}
+					tokenValues := map[string]any{
+						"email":  body.Email,
+						"expiry": time.Now().Add(time.Minute * 10).UTC().Unix(),
+					}
+					token, _ := utilities.Encrypt(tokenValues)
+					if err := cfg.notify(body.Email, token); err != nil {
+						cfg.error(w, utilities.ResponseError, err, http.StatusInternalServerError)
+						return
+					}
+
+					cfg.success(w, http.StatusOK, nil)
+				}
+
+			})
+		},
 	}
 }
