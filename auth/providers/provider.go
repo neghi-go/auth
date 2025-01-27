@@ -17,5 +17,5 @@ type ProviderConfig struct {
 }
 type Provider struct {
 	Name string
-	Init func(r chi.Router, cfg ProviderConfig)
+	Init func(r chi.Router, ctx ProviderConfig)
 }
