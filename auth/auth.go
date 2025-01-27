@@ -17,7 +17,9 @@ type Auth struct {
 }
 
 func New(opts ...Options) *Auth {
-	cfg := &Auth{}
+	cfg := &Auth{
+		session: session.NewJWTSession(),
+	}
 	for _, opt := range opts {
 		opt(cfg)
 	}

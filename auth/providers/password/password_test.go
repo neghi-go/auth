@@ -55,11 +55,7 @@ func TestPassword(t *testing.T) {
 	userModel, err := mongodb.RegisterModel(mongo, "users", models.User{})
 	require.NoError(t, err)
 
-	j, err := session.NewJWTSession(
-		session.WithPrivateKey(privKey),
-		session.WithPublicKey(pubKey),
-	)
-	require.NoError(t, err)
+	j := session.NewJWTSession()
 
 	PasswordProvider(WithStore(userModel), WithNotifier(func(email, token string) error {
 		auth_token = token
