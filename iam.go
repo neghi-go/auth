@@ -1,39 +1,26 @@
 package iam
 
 import (
-	"github.com/casbin/casbin/v2"
 	"github.com/go-chi/chi/v5"
-	"github.com/neghi-go/iam/authentication"
-	"github.com/neghi-go/iam/authentication/strategy/password"
+	"github.com/neghi-go/iam/auth"
 )
 
 type Options func(*IAM)
 
 type IAM struct {
-	auth *authentication.Auth
-	acl  *casbin.Enforcer
+	auth *auth.Auth
 }
 
-func New(r chi.Router, opts ...Options) (*IAM, error) {
-	cas, err := casbin.NewEnforcer()
-	if err != nil {
-		return nil, err
+func New(opts ...Options) (chi.Router, error) {
+	cfg := &IAM{}
+	for _, opt := range opts {
+		opt(cfg)
 	}
-	cfg := &IAM{
-		auth: authentication.New(r, authentication.RegisterStrategy(password.New())),
-		acl:  cas,
-	}
-	return cfg, nil
+	return cfg.auth.Build()
 }
 
-func WithAuth(auth *authentication.Auth) Options {
+func WithAuth(auth *auth.Auth) Options {
 	return func(i *IAM) {
 		i.auth = auth
-	}
-}
-
-func WithACL(acl *casbin.Enforcer) Options {
-	return func(i *IAM) {
-		i.acl = acl
 	}
 }
