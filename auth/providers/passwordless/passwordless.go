@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/neghi-go/database"
-	"github.com/neghi-go/iam/auth/models"
 	"github.com/neghi-go/iam/auth/providers"
+	"github.com/neghi-go/iam/internal/models"
 	"github.com/neghi-go/utilities"
 )
 
@@ -32,16 +32,9 @@ const (
 type Option func(*passwordlessProviderConfig)
 
 type passwordlessProviderConfig struct {
-	store   database.Model[models.User]
 	notify  func(email string, token string) error
 	success func(w http.ResponseWriter, status_code int, data interface{})
 	error   func(w http.ResponseWriter, status utilities.ResponseStatus, err error, status_code int)
-}
-
-func WithStore(model database.Model[models.User]) Option {
-	return func(ppc *passwordlessProviderConfig) {
-		ppc.store = model
-	}
 }
 
 func WithNotifier(notifier func(email, token string) error) Option {
@@ -70,7 +63,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 	}
 	return &providers.Provider{
 		Name: "magic-link",
-		Init: func(r chi.Router, ctx providers.ProviderConfig) {
+		Init: func(r chi.Router, ctx *providers.ProviderConfig) {
 			r.Post("/authorize", func(w http.ResponseWriter, r *http.Request) {
 				var body struct {
 					Email string `json:"email"`
@@ -103,7 +96,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 						return
 					}
 
-					user, err := cfg.store.WithContext(r.Context()).
+					user, err := ctx.User.WithContext(r.Context()).
 						Query(database.WithFilter("email", body.Email)).First()
 					if err != nil {
 						cfg.error(w, utilities.ResponseFail, errInvalidCredentials, http.StatusBadRequest)
@@ -123,7 +116,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 					}
 
 					//update user
-					if err := cfg.store.WithContext(r.Context()).Query(database.WithFilter("email", body.Email)).
+					if err := ctx.User.WithContext(r.Context()).Query(database.WithFilter("email", body.Email)).
 						Update(*user); err != nil {
 						cfg.error(w, utilities.ResponseFail, err, http.StatusBadRequest)
 						return
@@ -131,7 +124,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 					}
 					cfg.success(w, http.StatusOK, user)
 				case resend:
-					if _, err := cfg.store.WithContext(r.Context()).
+					if _, err := ctx.User.WithContext(r.Context()).
 						Query(database.WithFilter("email", body.Email)).First(); err != nil {
 						cfg.error(w, utilities.ResponseFail, errInvalidCredentials, http.StatusBadRequest)
 						return
@@ -146,15 +139,16 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 						cfg.error(w, utilities.ResponseError, err, http.StatusInternalServerError)
 						return
 					}
+					cfg.success(w, http.StatusOK, token)
 				default:
 					//get user if it exist and generate session
-					if _, err := cfg.store.WithContext(r.Context()).
+					if _, err := ctx.User.WithContext(r.Context()).
 						Query(database.WithFilter("email", body.Email)).First(); err != nil {
 						user := models.User{
 							ID:    uuid.New(),
 							Email: body.Email,
 						}
-						if err := cfg.store.WithContext(r.Context()).Save(user); err != nil {
+						if err := ctx.User.WithContext(r.Context()).Save(user); err != nil {
 							cfg.error(w, utilities.ResponseError, err, http.StatusBadRequest)
 							return
 						}
@@ -169,7 +163,7 @@ func PasswordlessProvider(opts ...Option) *providers.Provider {
 						return
 					}
 
-					cfg.success(w, http.StatusOK, nil)
+					cfg.success(w, http.StatusOK, token)
 				}
 
 			})
