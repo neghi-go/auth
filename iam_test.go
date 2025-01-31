@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
-	"github.com/neghi-go/iam/auth/models"
+	"github.com/neghi-go/iam/internal/models"
 	"github.com/neghi-go/session"
 	"github.com/neghi-go/session/store"
 	"github.com/stretchr/testify/require"

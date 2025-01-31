@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/neghi-go/database/mongodb"
-	"github.com/neghi-go/iam/auth/models"
 	"github.com/neghi-go/iam/auth/providers"
+	"github.com/neghi-go/iam/internal/models"
 	"github.com/neghi-go/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,11 +54,12 @@ func TestPasswordless(t *testing.T) {
 
 	j := session.NewJWTSession()
 
-	PasswordlessProvider(WithStore(userModel), WithNotifier(func(email, token string) error {
+	PasswordlessProvider(WithNotifier(func(email, token string) error {
 		auth_token = token
 		return nil
-	})).Init(router, providers.ProviderConfig{
+	})).Init(router, &providers.ProviderConfig{
 		Session: j,
+		User:    userModel,
 	})
 
 	t.Run("Test Authentication Flow", func(t *testing.T) {
