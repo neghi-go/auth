@@ -5,15 +5,18 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/neghi-go/database/mongodb"
 	"github.com/neghi-go/iam/auth/providers"
+	"github.com/neghi-go/iam/internal/models"
 	"github.com/neghi-go/session"
 )
 
 type Options func(*Auth)
 
 type Auth struct {
-	providers []*providers.Provider
-	session   session.Session
+	database, url string
+	providers     []*providers.Provider
+	session       session.Session
 }
 
 func New(opts ...Options) *Auth {
@@ -37,9 +40,26 @@ func RegisterSession(session session.Session) Options {
 		a.session = session
 	}
 }
+func SetDatabase(url, database string) Options {
+	return func(a *Auth) {
+		a.database = database
+		a.url = url
+	}
+}
 
 func (a *Auth) Build() (chi.Router, error) {
 	r := chi.NewRouter()
+
+	mgd, err := mongodb.New(a.url, a.database)
+	if err != nil {
+		return nil, err
+	}
+
+	userModel, err := mongodb.RegisterModel(mgd, "auth_users", models.User{})
+	if err != nil {
+		return nil, err
+	}
+
 	for _, p := range a.providers {
 		//Creates a new router for provider
 		router := chi.NewRouter()
@@ -52,8 +72,9 @@ func (a *Auth) Build() (chi.Router, error) {
 			})
 		})
 		//initialize route with context
-		p.Init(router, providers.ProviderConfig{
+		p.Init(router, &providers.ProviderConfig{
 			Session: a.session,
+			User:    userModel,
 		})
 		//register handler to global router
 		r.Mount("/"+p.Name, router)
