@@ -111,7 +111,7 @@ func newOauthProvider(name string, opts ...OauthOptions) *providers.Provider {
 	}
 	return &providers.Provider{
 		Name: name,
-		Init: func(r chi.Router, ctx providers.ProviderConfig) {
+		Init: func(r chi.Router, ctx *providers.ProviderConfig) {
 			r.Get("/authorize", func(w http.ResponseWriter, r *http.Request) {
 				var buf bytes.Buffer
 				url := strings.Split(r.RequestURI, "/")
@@ -123,8 +123,9 @@ func newOauthProvider(name string, opts ...OauthOptions) *providers.Provider {
 				v.Add("redirect_uri", "http://"+r.Host+strings.Join(url, "/"))
 				buf.WriteString(v.Encode())
 
-				utilities.JSON(w).SetStatus(utilities.ResponseSuccess).SetStatusCode(http.StatusOK).
-					SetData(map[string]string{"auth_url": buf.String()}).Send()
+				//utilities.JSON(w).SetStatus(utilities.ResponseSuccess).SetStatusCode(http.StatusOK).
+				//SetData(map[string]string{"auth_url": buf.String()}).Send()
+				http.Redirect(w, r, buf.String(), http.StatusTemporaryRedirect)
 
 			})
 			r.Get("/callback", func(w http.ResponseWriter, r *http.Request) {
